@@ -1,0 +1,1759 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shop Kyra – Bán File Uy Tín Số 1 Việt Nam</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Exo+2:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js">
+// ════════════════════════════════════════════════════
+// EMAIL OTP + KHÔI PHỤC MẬT KHẨU
+// ════════════════════════════════════════════════════
+let pendingRegister = null;
+let currentOTP = null;
+let otpExpire = null;
+let otpTimer = null;
+
+let forgotOTP = null;
+let forgotExpire = null;
+let forgotTimer = null;
+let forgotAccount = null;
+
+function randomOTP(){
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+function startOTPCountdown(elId, expireTime){
+  clearInterval(otpTimer);
+  otpTimer = setInterval(()=>{
+    let left = Math.max(0, Math.floor((expireTime - Date.now()) / 1000));
+    let m = String(Math.floor(left/60)).padStart(2,'0');
+    let s = String(left%60).padStart(2,'0');
+    const el = document.getElementById(elId);
+    if(el) el.innerText = `${m}:${s}`;
+    if(left <= 0){
+      clearInterval(otpTimer);
+    }
+  },1000);
+}
+
+function startForgotCountdown(elId, expireTime){
+  clearInterval(forgotTimer);
+  forgotTimer = setInterval(()=>{
+    let left = Math.max(0, Math.floor((expireTime - Date.now()) / 1000));
+    let m = String(Math.floor(left/60)).padStart(2,'0');
+    let s = String(left%60).padStart(2,'0');
+    const el = document.getElementById(elId);
+    if(el) el.innerText = `${m}:${s}`;
+    if(left <= 0){
+      clearInterval(forgotTimer);
+    }
+  },1000);
+}
+
+function sendMailOTP(email, code, title='Mã OTP xác thực'){
+  return emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
+    to_email: email,
+    passcode: code,
+    title: title,
+    message: `Mã OTP của bạn là: ${code}`
+  });
+}
+
+function doRegister(){
+  const fullname = document.getElementById('regFullname').value.trim();
+  const username = document.getElementById('regUser').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const password = document.getElementById('regPass').value;
+  const confirm = document.getElementById('regPassConfirm').value;
+
+  if(!fullname || !username || !email || !password || !confirm){
+    return alert('Vui lòng nhập đầy đủ thông tin.');
+  }
+
+  if(password.length < 6){
+    return alert('Mật khẩu phải từ 6 ký tự.');
+  }
+
+  if(password !== confirm){
+    return alert('Xác nhận mật khẩu không khớp.');
+  }
+
+  let users = JSON.parse(localStorage.getItem('shopkyra_users') || '[]');
+
+  if(users.find(u => u.username === username)){
+    return alert('Tên đăng nhập đã tồn tại.');
+  }
+
+  if(users.find(u => u.email === email)){
+    return alert('Email đã được sử dụng.');
+  }
+
+  pendingRegister = {
+    fullname,
+    username,
+    email,
+    password
+  };
+
+  currentOTP = randomOTP();
+  otpExpire = Date.now() + 300000;
+
+  document.getElementById('btnSubmitRegister').innerText = 'ĐANG GỬI OTP...';
+
+  sendMailOTP(email, currentOTP, 'Mã OTP đăng ký tài khoản')
+    .then(()=>{
+      document.getElementById('btnSubmitRegister').innerText = '🚀 TẠO TÀI KHOẢN NGAY ›';
+      document.getElementById('otpEmailDisplay').innerText = email;
+      document.getElementById('otpModal').classList.add('open');
+
+      for(let i=0;i<6;i++){
+        document.getElementById('otp'+i).value = '';
+      }
+
+      startOTPCountdown('otpTimerDisplay', otpExpire);
+      setTimeout(()=>{
+        document.getElementById('otp0').focus();
+      },100);
+    })
+    .catch(err=>{
+      console.error(err);
+      document.getElementById('btnSubmitRegister').innerText = '🚀 TẠO TÀI KHOẢN NGAY ›';
+      alert('Không gửi được OTP. Kiểm tra EmailJS Template.');
+    });
+}
+
+function otpNext(i){
+  const el = document.getElementById('otp'+i);
+  el.value = el.value.replace(/\D/g,'');
+  if(el.value && i < 5){
+    document.getElementById('otp'+(i+1)).focus();
+  }
+}
+
+function otpBack(e,i){
+  if(e.key === 'Backspace' && !document.getElementById('otp'+i).value && i > 0){
+    document.getElementById('otp'+(i-1)).focus();
+  }
+}
+
+function verifyOTP(){
+  let code = '';
+  for(let i=0;i<6;i++){
+    code += document.getElementById('otp'+i).value;
+  }
+
+  if(Date.now() > otpExpire){
+    return alert('Mã OTP đã hết hạn.');
+  }
+
+  if(code !== currentOTP){
+    return alert('Mã OTP không chính xác.');
+  }
+
+  let users = JSON.parse(localStorage.getItem('shopkyra_users') || '[]');
+
+  users.push({
+    fullname: pendingRegister.fullname,
+    username: pendingRegister.username,
+    email: pendingRegister.email,
+    password: pendingRegister.password,
+    balance: 0,
+    createdAt: new Date().toLocaleString('vi-VN'),
+    ip: 'LOCALHOST'
+  });
+
+  localStorage.setItem('shopkyra_users', JSON.stringify(users));
+
+  alert('Đăng ký thành công.');
+
+  document.getElementById('otpModal').classList.remove('open');
+  document.getElementById('authModal').classList.remove('open');
+}
+
+function resendOTP(){
+  if(!pendingRegister) return;
+
+  currentOTP = randomOTP();
+  otpExpire = Date.now() + 300000;
+
+  sendMailOTP(pendingRegister.email, currentOTP, 'Mã OTP đăng ký tài khoản')
+    .then(()=>{
+      alert('Đã gửi lại mã OTP.');
+      startOTPCountdown('otpTimerDisplay', otpExpire);
+    })
+    .catch(()=>{
+      alert('Không gửi lại được OTP.');
+    });
+}
+
+function closeOTPModal(){
+  document.getElementById('otpModal').classList.remove('open');
+}
+
+function openForgotModal(){
+  document.getElementById('forgotModal').classList.add('open');
+}
+
+function closeForgotModal(){
+  document.getElementById('forgotModal').classList.remove('open');
+}
+
+function sendForgotOTP(){
+  const email = document.getElementById('forgotEmail').value.trim();
+
+  let users = JSON.parse(localStorage.getItem('shopkyra_users') || '[]');
+  let user = users.find(u => u.email === email);
+
+  if(!user){
+    return alert('Không tìm thấy email.');
+  }
+
+  forgotAccount = user;
+  forgotOTP = randomOTP();
+  forgotExpire = Date.now() + 300000;
+
+  document.getElementById('btnSendForgotOTP').innerText = 'ĐANG GỬI OTP...';
+
+  sendMailOTP(email, forgotOTP, 'Mã OTP khôi phục mật khẩu')
+    .then(()=>{
+      document.getElementById('btnSendForgotOTP').innerText = '📧 GỬI MÃ OTP KHÔI PHỤC ›';
+
+      document.getElementById('forgotStep1').style.display = 'none';
+      document.getElementById('forgotStep2').style.display = 'block';
+      document.getElementById('forgotEmailDisplay').innerText = email;
+
+      startForgotCountdown('forgotTimerDisplay', forgotExpire);
+    })
+    .catch(err=>{
+      console.error(err);
+      document.getElementById('btnSendForgotOTP').innerText = '📧 GỬI MÃ OTP KHÔI PHỤC ›';
+      alert('Không gửi được OTP khôi phục.');
+    });
+}
+
+function fotpNext(i){
+  const el = document.getElementById('fotp'+i);
+  el.value = el.value.replace(/\D/g,'');
+  if(el.value && i < 5){
+    document.getElementById('fotp'+(i+1)).focus();
+  }
+}
+
+function fotpBack(e,i){
+  if(e.key === 'Backspace' && !document.getElementById('fotp'+i).value && i > 0){
+    document.getElementById('fotp'+(i-1)).focus();
+  }
+}
+
+function verifyForgotOTP(){
+  let code = '';
+  for(let i=0;i<6;i++){
+    code += document.getElementById('fotp'+i).value;
+  }
+
+  if(Date.now() > forgotExpire){
+    return alert('Mã OTP đã hết hạn.');
+  }
+
+  if(code !== forgotOTP){
+    return alert('OTP không chính xác.');
+  }
+
+  document.getElementById('forgotStep2').style.display = 'none';
+  document.getElementById('forgotStep3').style.display = 'block';
+}
+
+function doResetPassword(){
+  const p1 = document.getElementById('newPw1').value;
+  const p2 = document.getElementById('newPw2').value;
+
+  if(p1.length < 6){
+    return alert('Mật khẩu tối thiểu 6 ký tự.');
+  }
+
+  if(p1 !== p2){
+    return alert('Mật khẩu xác nhận không khớp.');
+  }
+
+  let users = JSON.parse(localStorage.getItem('shopkyra_users') || '[]');
+
+  users = users.map(u=>{
+    if(u.email === forgotAccount.email){
+      u.password = p1;
+    }
+    return u;
+  });
+
+  localStorage.setItem('shopkyra_users', JSON.stringify(users));
+
+  alert('Đổi mật khẩu thành công.');
+
+  closeForgotModal();
+
+  document.getElementById('forgotStep1').style.display = 'block';
+  document.getElementById('forgotStep2').style.display = 'none';
+  document.getElementById('forgotStep3').style.display = 'none';
+}
+
+</script>
+<script>emailjs.init('oVC_LQy5IkBPxwcPR');</script>
+<style>
+:root{
+  --bg:#04060e;--bg2:#080c18;--panel:#0a0f1e;--panel2:#0d1428;
+  --border:#1a2a4a;--border2:#243656;
+  --accent:#00d4ff;--accent2:#ff3c6e;
+  --gold:#ffd700;--green:#00ff88;--orange:#ff6b35;
+  --text:#c8d8f0;--dim:#5a7a9a;--dim2:#3a4a6a;
+  --glow:0 0 20px rgba(0,212,255,.4),0 0 40px rgba(0,212,255,.2);
+  --glowGold:0 0 20px rgba(255,215,0,.4);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--text);font-family:'Exo 2',sans-serif;min-height:100vh;overflow-x:hidden;}
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse 60% 40% at 20% 10%,rgba(0,212,255,.06) 0%,transparent 60%),radial-gradient(ellipse 50% 35% at 80% 90%,rgba(255,60,110,.05) 0%,transparent 55%);}
+#fw-canvas{position:fixed;inset:0;z-index:1;pointer-events:none;}
+@keyframes slideUp{from{transform:translateY(60px) scale(.9);opacity:0}to{transform:none;opacity:1}}
+@keyframes pulse{0%,100%{text-shadow:0 0 20px rgba(255,215,0,.5)}50%{text-shadow:0 0 40px rgba(255,215,0,.9)}}
+@keyframes gradShift{0%{background-position:0 50%}50%{background-position:100% 50%}100%{background-position:0 50%}}
+@keyframes marquee{from{transform:translateX(100vw)}to{transform:translateX(-100%)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+
+/* MODAL CHÀO MỪNG */
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.92);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:9999;}
+.modal-box{width:100%;max-width:520px;background:linear-gradient(145deg,#0a0f1e,#0f1932);border:1px solid var(--accent);box-shadow:0 0 80px rgba(0,212,255,.3);margin:16px;overflow:hidden;animation:slideUp .5s cubic-bezier(.175,.885,.32,1.275);}
+.mbox-top{background:linear-gradient(135deg,#0050aa,#003377);padding:22px 28px;text-align:center;border-bottom:2px solid var(--accent);}
+.mbox-top .mt{font-family:'Orbitron',monospace;font-size:15px;font-weight:900;color:#fff;letter-spacing:4px;}
+.mbox-top .ms{font-size:11px;color:rgba(255,255,255,.7);letter-spacing:2px;margin-top:5px;}
+.mbox-body{padding:28px 32px;}
+.mad{font-family:'Orbitron',monospace;font-size:22px;font-weight:900;color:var(--gold);text-align:center;margin-bottom:14px;letter-spacing:2px;animation:pulse 2s ease-in-out infinite;}
+.mdesc{font-size:14px;line-height:1.9;color:var(--text);text-align:center;margin-bottom:20px;}
+.mcontact-box{background:#0a0f1e;border:1px solid var(--border2);padding:14px 18px;margin-bottom:20px;}
+.mcontact-box p{font-size:13px;line-height:2;color:var(--dim);}
+.mcontact-box strong{color:var(--accent);}
+.mclose{display:block;width:100%;padding:15px;background:linear-gradient(135deg,var(--accent),#005f99);border:none;color:#000;font-family:'Orbitron',monospace;font-size:11px;font-weight:900;cursor:pointer;letter-spacing:3px;transition:all .3s;}
+.mclose:hover{box-shadow:var(--glow);}
+
+/* BUY MODAL */
+.buy-modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.92);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;z-index:9000;}
+.buy-modal-ov.open{display:flex;}
+.buy-modal-box{width:100%;max-width:480px;background:linear-gradient(145deg,#0a0f1e,#0f1932);border:1px solid var(--border2);margin:16px;overflow:hidden;animation:slideUp .4s ease;}
+.buy-modal-top{background:linear-gradient(135deg,#1a0a2e,#0d0820);padding:18px 24px;border-bottom:1px solid var(--border2);}
+.buy-modal-top h2{font-family:'Orbitron',monospace;font-size:13px;font-weight:900;color:var(--accent);letter-spacing:3px;}
+.buy-modal-body{padding:24px;}
+.buy-info-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);}
+.buy-info-row:last-of-type{border-bottom:none;}
+.buy-info-row .label{font-size:13px;color:var(--dim);}
+.buy-info-row .val{font-size:14px;font-weight:700;color:var(--text);}
+.buy-confirm-btn{display:block;width:100%;padding:14px;background:linear-gradient(135deg,var(--green),#009944);border:none;color:#000;font-family:'Orbitron',monospace;font-size:11px;font-weight:900;cursor:pointer;letter-spacing:2px;margin-top:18px;transition:all .3s;}
+.buy-confirm-btn:hover{box-shadow:0 0 20px rgba(0,255,136,.4);}
+.buy-cancel-btn{display:block;width:100%;padding:10px;background:transparent;border:1px solid var(--border2);color:var(--dim);font-family:'Orbitron',monospace;font-size:10px;cursor:pointer;letter-spacing:2px;margin-top:8px;transition:all .3s;}
+.buy-cancel-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+
+/* NẠP TIỀN MODAL */
+.nap-modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.92);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;z-index:9000;}
+.nap-modal-ov.open{display:flex;}
+.nap-modal-box{width:100%;max-width:520px;background:linear-gradient(145deg,#0a0f1e,#0f1932);border:1px solid var(--accent);box-shadow:0 0 60px rgba(0,212,255,.3);margin:16px;overflow:hidden;animation:slideUp .4s ease;max-height:90vh;overflow-y:auto;}
+.nap-modal-top{background:linear-gradient(135deg,#003366,#001a44);padding:20px 28px;border-bottom:2px solid var(--accent);text-align:center;}
+.nap-modal-top h2{font-family:'Orbitron',monospace;font-size:14px;font-weight:900;color:var(--accent);letter-spacing:3px;}
+.nap-modal-body{padding:28px;}
+.nap-step-title{font-family:'Orbitron',monospace;font-size:11px;font-weight:900;color:var(--gold);letter-spacing:2px;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+.fg{margin-bottom:16px;}
+.fg label{display:block;font-size:12px;color:var(--dim);letter-spacing:1px;margin-bottom:7px;font-family:'Orbitron',monospace;}
+.fg input{width:100%;background:#060a12;border:1px solid var(--border2);color:var(--text);padding:12px 16px;font-family:'Exo 2',sans-serif;font-size:14px;outline:none;transition:border-color .25s;}
+.fg input:focus{border-color:var(--accent);}
+.amount-presets{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;}
+.amount-btn{padding:10px;border:1px solid var(--border2);background:transparent;color:var(--text);font-family:'Exo 2',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .25s;}
+.amount-btn:hover,.amount-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,.06);}
+.sbtn{display:block;width:100%;padding:14px;border:none;font-family:'Orbitron',monospace;font-size:11px;font-weight:900;cursor:pointer;letter-spacing:3px;transition:all .3s;}
+.sbtn.cyan{background:linear-gradient(135deg,var(--accent),#005599);color:#000;}
+.sbtn.cyan:hover{box-shadow:var(--glow);}
+.sbtn.gold{background:linear-gradient(135deg,var(--gold),#aa7700);color:#000;}
+.bank-info-box{background:#060a12;border:1px solid var(--accent);padding:20px;margin-top:20px;text-align:center;}
+.bank-row{font-size:14px;line-height:2.4;color:var(--text);}
+.bank-row b{color:var(--gold);}
+.bank-row b.acc{color:var(--accent2);}
+.qr-code-img{width:220px;max-width:100%;background:white;padding:8px;border:4px solid var(--accent);margin:16px auto;display:block;}
+.nap-content-code{background:#000;border:1px solid var(--accent);font-family:'Orbitron',monospace;font-size:15px;color:var(--green);padding:14px;text-align:center;word-break:break-all;margin-top:10px;cursor:pointer;transition:all .3s;letter-spacing:2px;}
+.nap-content-code:hover{background:rgba(0,212,255,.05);}
+.copy-hint{font-size:11px;color:var(--dim);text-align:center;margin-top:6px;}
+.nap-zalo-note{background:rgba(0,212,255,.06);border:1px solid var(--accent);padding:16px 20px;text-align:center;margin-top:16px;}
+.nap-zalo-note p{font-size:13px;color:var(--dim);line-height:1.9;}
+.nap-zalo-note a{color:var(--gold);font-weight:700;text-decoration:none;}
+.nap-close-btn{display:block;width:100%;padding:12px;background:transparent;border:1px solid var(--border2);color:var(--dim);font-family:'Orbitron',monospace;font-size:10px;cursor:pointer;letter-spacing:2px;margin-top:12px;transition:all .3s;}
+.nap-close-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+
+/* AUTH MODAL */
+.auth-modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.92);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;z-index:9000;}
+.auth-modal-ov.open{display:flex;}
+.auth-modal-box{width:100%;max-width:460px;background:linear-gradient(145deg,#0a0f1e,#0f1932);border:1px solid var(--border2);margin:16px;overflow:hidden;animation:slideUp .4s ease;max-height:92vh;overflow-y:auto;}
+.auth-modal-top{background:linear-gradient(135deg,#1a0a2e,#0d0820);padding:18px 24px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;}
+.auth-modal-top h2{font-family:'Orbitron',monospace;font-size:13px;font-weight:900;color:var(--accent);letter-spacing:3px;}
+.auth-close{background:none;border:none;color:var(--dim);font-size:20px;cursor:pointer;}
+.auth-close:hover{color:var(--accent2);}
+.auth-modal-body{padding:28px;}
+.auth-tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:24px;}
+.auth-tab{flex:1;padding:12px;background:none;border:none;color:var(--dim);font-family:'Orbitron',monospace;font-size:10px;letter-spacing:2px;cursor:pointer;border-bottom:2px solid transparent;transition:all .3s;}
+.auth-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.auth-form{display:none;}
+.auth-form.active{display:block;}
+.auth-msg{padding:10px 14px;margin-bottom:14px;font-size:13px;font-weight:600;border-left:3px solid;}
+.auth-msg.error{background:rgba(255,60,110,.07);border-color:var(--accent2);color:var(--accent2);}
+.auth-msg.success{background:rgba(0,255,136,.07);border-color:var(--green);color:var(--green);}
+
+/* OTP MODAL */
+.otp-modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.92);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;z-index:9800;}
+.otp-modal-ov.open{display:flex;}
+.otp-modal-box{width:100%;max-width:420px;background:linear-gradient(145deg,#0a0f1e,#0f1932);border:1px solid var(--accent);box-shadow:0 0 60px rgba(0,212,255,.3);margin:16px;overflow:hidden;animation:slideUp .4s ease;}
+.otp-modal-top{background:linear-gradient(135deg,#003366,#001a44);padding:20px 28px;border-bottom:2px solid var(--accent);text-align:center;}
+.otp-modal-top h2{font-family:'Orbitron',monospace;font-size:13px;font-weight:900;color:var(--accent);letter-spacing:3px;}
+.otp-modal-body{padding:28px;}
+.otp-input-row{display:flex;gap:10px;justify-content:center;margin:18px 0;}
+.otp-digit{width:52px;height:60px;background:#060a12;border:2px solid var(--border2);color:var(--accent);font-family:'Orbitron',monospace;font-size:22px;font-weight:900;text-align:center;outline:none;transition:border-color .25s;}
+.otp-digit:focus{border-color:var(--accent);box-shadow:0 0 12px rgba(0,212,255,.3);}
+.otp-timer{text-align:center;font-size:12px;color:var(--dim);margin-bottom:14px;font-family:'Orbitron',monospace;}
+.otp-timer span{color:var(--accent2);font-weight:900;}
+/* FORGOT PASSWORD MODAL */
+.forgot-modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.92);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;z-index:9800;}
+.forgot-modal-ov.open{display:flex;}
+.forgot-modal-box{width:100%;max-width:420px;background:linear-gradient(145deg,#0a0f1e,#0f1932);border:1px solid var(--accent2);box-shadow:0 0 60px rgba(255,60,110,.3);margin:16px;overflow:hidden;animation:slideUp .4s ease;}
+.forgot-modal-top{background:linear-gradient(135deg,#2a0015,#1a0010);padding:20px 28px;border-bottom:2px solid var(--accent2);text-align:center;}
+.forgot-modal-top h2{font-family:'Orbitron',monospace;font-size:13px;font-weight:900;color:var(--accent2);letter-spacing:3px;}
+.forgot-modal-body{padding:28px;}
+.sbtn.pink{background:linear-gradient(135deg,var(--accent2),#7a0820);color:#fff;}
+.sbtn.pink:hover{box-shadow:0 0 20px rgba(255,60,110,.4);}
+/* ADMIN EMAIL COL */
+.admin-table td.em{color:var(--accent);font-size:12px;}
+.admin-table td.dt{color:var(--dim);font-size:11px;}
+.success-modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.92);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;z-index:9500;}
+.success-modal-ov.open{display:flex;}
+.success-modal-box{width:100%;max-width:520px;background:linear-gradient(145deg,#0a0f1e,#0f1932);border:1px solid var(--green);box-shadow:0 0 80px rgba(0,255,136,.3);margin:16px;overflow:hidden;animation:slideUp .5s ease;max-height:90vh;overflow-y:auto;}
+.success-top{background:linear-gradient(135deg,#003322,#001a11);padding:20px 28px;text-align:center;border-bottom:2px solid var(--green);}
+.success-top h2{font-family:'Orbitron',monospace;font-size:14px;font-weight:900;color:var(--green);letter-spacing:3px;}
+.success-body{padding:28px;}
+.success-item{background:#060a12;border:1px solid var(--border2);padding:16px;margin-bottom:16px;}
+.success-item .si-label{font-size:11px;color:var(--dim);letter-spacing:1px;margin-bottom:6px;}
+.success-item .si-val{font-size:15px;font-weight:700;color:var(--text);}
+.success-item .si-val.link{color:var(--accent);word-break:break-all;font-size:13px;}
+.success-dl-btn{display:block;width:100%;padding:15px;background:linear-gradient(135deg,var(--green),#009944);border:none;color:#000;font-family:'Orbitron',monospace;font-size:12px;font-weight:900;cursor:pointer;letter-spacing:2px;text-decoration:none;text-align:center;margin-top:8px;}
+.success-video-wrap{background:#060a12;border:1px solid var(--border2);padding:16px;margin-bottom:16px;}
+.success-video-wrap .si-label{font-size:11px;color:var(--dim);letter-spacing:1px;margin-bottom:10px;}
+.success-video-wrap iframe,.success-video-wrap video{width:100%;height:200px;border:none;}
+
+/* BANNER */
+.ad-banner{background:linear-gradient(90deg,#ff3c6e,#ff6b35,#ffd700,#00ff88,#00d4ff,#ffd700,#ff6b35,#ff3c6e);background-size:400% 100%;animation:gradShift 4s ease infinite;text-align:center;padding:10px 20px;font-family:'Orbitron',monospace;font-size:11px;font-weight:900;color:#000;letter-spacing:3px;position:relative;z-index:200;}
+
+/* NAV */
+nav{position:sticky;top:0;z-index:500;display:flex;align-items:center;justify-content:space-between;padding:10px 32px;background:rgba(4,6,14,.97);border-bottom:1px solid var(--border2);backdrop-filter:blur(20px);gap:12px;flex-wrap:wrap;}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+.logo-text{font-family:'Orbitron',monospace;font-size:20px;font-weight:900;color:var(--accent);letter-spacing:2px;text-shadow:var(--glow);}
+.logo-text span{color:var(--accent2);}
+.nav-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.nbtn{padding:8px 18px;border:1px solid var(--border2);background:transparent;color:var(--text);font-family:'Exo 2',sans-serif;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;transition:all .25s;clip-path:polygon(8px 0%,100% 0%,calc(100% - 8px) 100%,0% 100%);white-space:nowrap;}
+.nbtn:hover{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,.06);}
+.nbtn.blue{background:linear-gradient(135deg,var(--accent),#005599);border-color:var(--accent);color:#000;font-weight:900;}
+.nbtn.gold{background:linear-gradient(135deg,var(--gold),#aa7700);border-color:var(--gold);color:#000;font-weight:900;}
+.nbtn.green{background:linear-gradient(135deg,var(--green),#009944);border-color:var(--green);color:#000;font-weight:900;}
+.nbtn.red{background:linear-gradient(135deg,var(--accent2),#7a0820);border-color:var(--accent2);color:#fff;}
+.uchip{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--border2);padding:7px 16px;}
+.uchip .un{font-family:'Orbitron',monospace;font-size:10px;color:var(--accent);}
+.uchip .ub{font-family:'Orbitron',monospace;font-size:11px;color:var(--gold);font-weight:700;}
+
+/* MARQUEE */
+.marquee-bar{background:linear-gradient(90deg,var(--panel),var(--panel2),var(--panel));border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:10px 0;overflow:hidden;white-space:nowrap;}
+.marquee-inner{display:inline-block;animation:marquee 28s linear infinite;font-size:13px;color:var(--dim);}
+.marquee-inner span{color:var(--accent);font-weight:700;}
+
+/* LAYOUT */
+.wrap{position:relative;z-index:50;max-width:1180px;margin:0 auto;padding:30px 18px 100px;}
+.msg{padding:13px 18px;margin-bottom:20px;font-size:14px;font-weight:600;border-left:4px solid;}
+.msg.success{background:rgba(0,255,136,.07);border-color:var(--green);color:var(--green);}
+.msg.error{background:rgba(255,60,110,.07);border-color:var(--accent2);color:var(--accent2);}
+.fade-in{animation:fadeIn .5s ease both;}
+
+/* HERO */
+.hero{text-align:center;padding:60px 20px 36px;}
+.hero-badge{display:inline-block;background:linear-gradient(135deg,rgba(255,215,0,.15),rgba(255,215,0,.05));border:1px solid rgba(255,215,0,.4);color:var(--gold);font-family:'Orbitron',monospace;font-size:10px;font-weight:900;letter-spacing:4px;padding:7px 20px;margin-bottom:20px;}
+.hero h1{font-family:'Orbitron',monospace;font-size:clamp(24px,5vw,52px);font-weight:900;line-height:1.15;margin-bottom:16px;background:linear-gradient(135deg,#ffffff 0%,var(--accent) 50%,var(--accent2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.hero p{font-size:clamp(14px,2vw,18px);color:var(--dim);max-width:680px;margin:0 auto 30px;}
+.hero-stats{display:flex;gap:32px;justify-content:center;flex-wrap:wrap;}
+.hstat-num{font-family:'Orbitron',monospace;font-size:28px;font-weight:900;color:var(--accent);line-height:1;}
+.hstat-label{font-size:11px;color:var(--dim);letter-spacing:2px;margin-top:4px;text-transform:uppercase;}
+.hero-btns{margin-top:30px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;}
+.hbtn{padding:14px 32px;font-family:'Orbitron',monospace;font-size:11px;font-weight:900;letter-spacing:3px;cursor:pointer;text-decoration:none;border:none;clip-path:polygon(12px 0%,100% 0%,calc(100% - 12px) 100%,0% 100%);transition:all .3s;}
+.hbtn.main{background:linear-gradient(135deg,var(--accent),#005599);color:#000;}
+.hbtn.main:hover{box-shadow:var(--glow);transform:translateY(-2px);}
+.hbtn.sec{background:transparent;border:1px solid var(--border2);color:var(--text);}
+.hbtn.sec:hover{border-color:var(--accent2);color:var(--accent2);}
+
+/* INFO CARDS */
+.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;}
+.info-card{background:var(--panel);border:1px solid var(--border);padding:24px;transition:border-color .3s;}
+.info-card:hover{border-color:var(--accent);}
+.info-card-icon{font-size:32px;margin-bottom:12px;}
+.info-card-title{font-family:'Orbitron',monospace;font-size:11px;font-weight:900;color:#fff;letter-spacing:2px;margin-bottom:8px;}
+.info-card-desc{font-size:13px;color:var(--dim);line-height:1.7;}
+.sec-title{font-family:'Orbitron',monospace;font-size:13px;font-weight:900;color:#fff;margin-bottom:18px;display:flex;align-items:center;gap:14px;letter-spacing:2px;}
+
+/* CATEGORY TABS */
+.cat-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:28px;}
+.cat-tab{padding:10px 20px;border:1px solid var(--border2);background:transparent;color:var(--dim);font-family:'Orbitron',monospace;font-size:10px;letter-spacing:2px;cursor:pointer;transition:all .25s;clip-path:polygon(8px 0%,100% 0%,calc(100% - 8px) 100%,0% 100%);}
+.cat-tab:hover,.cat-tab.active{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,.06);}
+
+/* PRODUCT GRID */
+.prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px;}
+.prod-card{background:var(--panel);border:1px solid var(--border);overflow:hidden;transition:transform .3s,border-color .3s,box-shadow .3s;position:relative;}
+.prod-card:hover{transform:translateY(-4px);border-color:var(--accent);box-shadow:var(--glow);}
+.prod-img{width:100%;height:170px;object-fit:cover;display:block;}
+.prod-tag{position:absolute;top:12px;right:12px;padding:4px 10px;font-family:'Orbitron',monospace;font-size:9px;font-weight:900;letter-spacing:1px;}
+.prod-tag.red{background:var(--accent2);color:#fff;}
+.prod-tag.gold{background:var(--gold);color:#000;}
+.prod-tag.cyan{background:var(--accent);color:#000;}
+.prod-tag.green{background:var(--green);color:#000;}
+.prod-tag.orange{background:var(--orange);color:#fff;}
+.prod-body{padding:18px;}
+.prod-name{font-family:'Orbitron',monospace;font-size:12px;font-weight:900;color:#fff;margin-bottom:8px;}
+.prod-desc{font-size:12px;color:var(--dim);line-height:1.7;margin-bottom:14px;}
+.prod-price{font-family:'Orbitron',monospace;font-size:18px;font-weight:900;color:var(--gold);margin-bottom:14px;text-shadow:var(--glowGold);}
+.prod-btns{display:flex;gap:8px;flex-wrap:wrap;}
+.pbtn{padding:9px 16px;border:none;font-family:'Orbitron',monospace;font-size:9px;font-weight:900;cursor:pointer;letter-spacing:1px;transition:all .3s;text-decoration:none;display:inline-block;clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);}
+.pbtn.buy{background:linear-gradient(135deg,var(--accent),#005599);color:#000;}
+.pbtn.buy:hover{box-shadow:var(--glow);}
+.pbtn.owned{background:linear-gradient(135deg,var(--green),#009944);color:#000;}
+
+/* TX SECTION */
+.tx-section{background:var(--panel);border:1px solid var(--border);}
+.tx-section-title{font-family:'Orbitron',monospace;font-size:11px;font-weight:900;color:var(--accent);letter-spacing:3px;padding:14px 18px;border-bottom:1px solid var(--border);}
+.tx-feed{max-height:200px;overflow:hidden;}
+.recent-item{padding:9px 18px;border-bottom:1px solid var(--border);font-size:13px;color:var(--dim);}
+.tx-name{color:var(--text);font-weight:700;}
+.tx-amt{color:var(--green);font-weight:700;}
+.tx-buy-feed{max-height:280px;overflow-y:auto;}
+.buy-tx-item{display:flex;align-items:center;gap:14px;padding:10px 18px;border-bottom:1px solid var(--border);}
+.btx-icon{font-size:18px;width:28px;text-align:center;}
+.btx-info{flex:1;}
+.btx-name{display:block;font-size:13px;font-weight:700;color:var(--text);}
+.btx-prod{display:block;font-size:11px;color:var(--dim);}
+
+/* CONTACT / POLICY */
+.page-panel{background:var(--panel);border:1px solid var(--border);padding:32px;max-width:800px;margin:0 auto;}
+.page-panel h2{font-family:'Orbitron',monospace;font-size:16px;color:var(--accent);letter-spacing:3px;margin-bottom:24px;padding-bottom:14px;border-bottom:1px solid var(--border2);}
+.page-panel p{font-size:14px;color:var(--dim);line-height:2;margin-bottom:8px;}
+.page-panel strong{color:var(--text);}
+.contact-item{display:flex;align-items:center;gap:16px;padding:16px;background:#060a12;border:1px solid var(--border2);margin-bottom:12px;transition:border-color .3s;}
+.contact-item:hover{border-color:var(--accent);}
+.contact-icon{font-size:28px;width:40px;text-align:center;}
+.contact-label{font-size:11px;color:var(--dim);letter-spacing:1px;}
+.contact-val{font-size:15px;font-weight:700;color:var(--text);}
+.contact-val a{color:var(--accent);text-decoration:none;}
+
+/* DASHBOARD */
+.dash-layout{display:grid;grid-template-columns:220px 1fr;gap:24px;}
+.dash-sidebar{background:var(--panel);border:1px solid var(--border);overflow:hidden;}
+.dash-sidebar a{display:block;padding:14px 20px;text-decoration:none;color:var(--dim);font-size:13px;border-bottom:1px solid var(--border);transition:all .25s;}
+.dash-sidebar a:hover,.dash-sidebar a.active{background:rgba(0,212,255,.06);color:var(--accent);border-left:3px solid var(--accent);}
+.dash-main{display:flex;flex-direction:column;gap:20px;}
+.dc{background:var(--panel);border:1px solid var(--border);padding:24px;}
+.dc h3{font-family:'Orbitron',monospace;font-size:12px;color:var(--accent);letter-spacing:2px;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid var(--border);}
+.dc p{font-size:14px;color:var(--dim);padding:8px 0;border-bottom:1px solid rgba(26,42,74,.5);line-height:1.7;}
+.dc p:last-child{border-bottom:none;}
+.dc p strong{color:var(--text);}
+
+/* ADMIN TABLE */
+.admin-table-wrapper{overflow-x:auto;margin-top:14px;}
+.admin-table{width:100%;border-collapse:collapse;font-size:13px;color:var(--text);text-align:left;}
+.admin-table th{background:var(--panel2);border:1px solid var(--border2);padding:10px 14px;color:var(--accent);font-family:'Orbitron',monospace;font-size:10px;}
+.admin-table td{border:1px solid var(--border);padding:10px 14px;background:#050914;}
+.admin-table tr:hover td{background:rgba(0,212,255,.03);}
+.admin-badge{display:inline-block;padding:3px 8px;font-size:10px;font-family:'Orbitron',monospace;font-weight:900;}
+.admin-badge.admin{background:var(--gold);color:#000;}
+.admin-badge.user{background:var(--panel2);color:var(--dim);border:1px solid var(--border2);}
+.admin-stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px;}
+.admin-stat-card{background:#060a12;border:1px solid var(--border2);padding:16px;text-align:center;}
+.admin-stat-num{font-family:'Orbitron',monospace;font-size:22px;font-weight:900;color:var(--accent);}
+.admin-stat-label{font-size:11px;color:var(--dim);margin-top:4px;}
+
+/* STORAGE */
+.storage-item{background:#060a12;border:1px solid var(--border2);padding:16px;margin-bottom:12px;}
+.storage-item-name{font-family:'Orbitron',monospace;font-size:11px;color:var(--gold);letter-spacing:1px;margin-bottom:8px;}
+.storage-item-time{font-size:11px;color:var(--dim);margin-bottom:10px;}
+.storage-btns{display:flex;gap:8px;flex-wrap:wrap;}
+
+/* FOOTER */
+footer{position:relative;z-index:50;background:var(--panel2);border-top:1px solid var(--border);padding:32px 20px;text-align:center;}
+.footer-logo{font-family:'Orbitron',monospace;font-size:22px;font-weight:900;color:var(--accent);letter-spacing:2px;display:block;margin-bottom:16px;}
+.footer-logo span{color:var(--accent2);}
+.footer-links{display:flex;gap:20px;justify-content:center;flex-wrap:wrap;margin-bottom:16px;}
+.footer-links a{text-decoration:none;color:var(--dim);font-size:13px;transition:color .25s;}
+.footer-links a:hover{color:var(--accent);}
+.footer-socials{display:flex;gap:12px;justify-content:center;margin-bottom:16px;}
+.social-btn{padding:8px 18px;background:var(--panel);border:1px solid var(--border2);text-decoration:none;color:var(--text);font-size:13px;transition:all .25s;}
+.social-btn:hover{border-color:var(--accent);color:var(--accent);}
+footer p{font-size:12px;color:var(--dim2);}
+
+/* ZALO FLOAT */
+.zalo-float{position:fixed;bottom:24px;right:24px;z-index:9000;}
+.zalo-float-btn{display:flex;align-items:center;gap:10px;padding:12px 20px;border-radius:50px;text-decoration:none;font-weight:700;font-size:13px;color:#fff;background:linear-gradient(135deg,#0068ff,#0050cc);box-shadow:0 4px 20px rgba(0,0,0,.4);transition:all .3s;}
+.zalo-float-btn:hover{transform:translateY(-3px) scale(1.04);}
+.zalo-float-label{font-size:10px;opacity:.8;display:block;}
+
+@media(max-width:768px){
+  nav{padding:10px 16px;}
+  .wrap{padding:20px 12px 80px;}
+  .dash-layout{grid-template-columns:1fr;}
+  .prod-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));}
+}
+</style>
+</head>
+<body>
+<canvas id="fw-canvas"></canvas>
+
+<!-- WELCOME MODAL -->
+<div class="modal-ov" id="welcomeModal" style="display:none;">
+  <div class="modal-box">
+    <div class="mbox-top">
+      <div class="mt">🎉 CHÀO MỪNG ĐẾN VỚI SHOP KYRA 🎉</div>
+      <div class="ms">UY TÍN · CHẤT LƯỢNG · NHANH CHÓNG</div>
+    </div>
+    <div class="mbox-body">
+      <div class="mad">SHOP KYRA</div>
+      <div class="mdesc">
+📢 SHOPKYRA.SITE - CHUYÊN FILE FULL ĐỎ
+✅ File Game Tất Cả Thiết Bị
+💰 GIÁ RẺ: Chỉ từ 50.000 VNĐ.
+🚀 UY TÍN: Giao hàng tự động – Bảo hành 1:1 – Hỗ trợ 24/7.
+
+🔗 MUA NGAY TẠI: SHOPKYRA.SITE
+— Uy tín tạo niềm tin! —</div>
+      <div class="mcontact-box">
+        <p>📱 <strong>Zalo KTV hỗ trợ:</strong> 0908967936
+        <p>⚡ <strong>Giao dịch:</strong> Tự động hoàn toàn  bằng sepay</p>
+      </div>
+      <button class="mclose" onclick="closeWelcome()">TRUY CẬP TRANG WEB ›</button>
+    </div>
+  </div>
+</div>
+
+<!-- BUY MODAL -->
+<div class="buy-modal-ov" id="buyModal">
+  <div class="buy-modal-box">
+    <div class="buy-modal-top"><h2>🛒 XÁC NHẬN GIAO DỊCH MUA FILE</h2></div>
+    <div class="buy-modal-body">
+      <div class="buy-info-row"><span class="label">Tên sản phẩm:</span><span class="val" id="modal-pname">—</span></div>
+      <div class="buy-info-row"><span class="label">Giá bán:</span><span class="val" id="modal-pprice" style="color:var(--gold);">—</span></div>
+      <div class="buy-info-row"><span class="label">Số dư hiện tại:</span><span class="val" id="modal-balance">—</span></div>
+      <div class="buy-info-row"><span class="label">Số dư sau khi mua:</span><span class="val" id="modal-after">—</span></div>
+      <button class="buy-confirm-btn" onclick="confirmBuy()">⚡ ĐỒNG Ý THANH TOÁN</button>
+      <button class="buy-cancel-btn" onclick="closeBuyModal()">✖ HỦY BỎ</button>
+    </div>
+  </div>
+</div>
+
+<!-- NẠP TIỀN MODAL -->
+<div class="nap-modal-ov" id="napModal">
+  <div class="nap-modal-box">
+    <div class="nap-modal-top">
+      <h2>💳 NẠP TIỀN QUA BIDV</h2>
+      <p style="font-size:11px;color:rgba(255,255,255,.5);margin-top:4px;">CHUYỂN KHOẢN TRỰC TIẾP – AN TOÀN – NHANH CHÓNG</p>
+    </div>
+    <div class="nap-modal-body">
+      <div id="napStep1">
+        <div class="nap-step-title">BƯỚC 1: CHỌN SỐ TIỀN NẠP</div>
+        <div class="amount-presets">
+          <button class="amount-btn" onclick="setAmount(50000)">50.000đ</button>
+          <button class="amount-btn" onclick="setAmount(100000)">100.000đ</button>
+          <button class="amount-btn" onclick="setAmount(150000)">150.000đ</button>
+          <button class="amount-btn" onclick="setAmount(200000)">200.000đ</button>
+          <button class="amount-btn" onclick="setAmount(300000)">300.000đ</button>
+          <button class="amount-btn" onclick="setAmount(500000)">500.000đ</button>
+        </div>
+        <div class="fg">
+          <label>HOẶC NHẬP SỐ TIỀN TUỲ Ý (TỐI THIỂU 10.000đ)</label>
+          <input type="number" id="napAmount" placeholder="Ví dụ: 75000" min="10000" oninput="clearPreset()">
+        </div>
+        <button class="sbtn cyan" onclick="taoQR()">⚡ TẠO MÃ QR CHUYỂN KHOẢN ›</button>
+      </div>
+      <div id="napStep2" style="display:none;">
+        <div class="nap-step-title">BƯỚC 2: QUÉT MÃ QR CHUYỂN KHOẢN</div>
+        <div class="bank-info-box">
+          <img id="napQrImg" class="qr-code-img" src="" alt="QR Code">
+          <div class="bank-row">🏦 Ngân hàng: <b>BIDV</b></div>
+          <div class="bank-row">👤 Chủ TK: <b>NGUYEN HUU GIA BAO</b></div>
+          <div class="bank-row">🔢 Số TK: <b class="acc">8818690730</b></div>
+          <div class="bank-row">💰 Số tiền: <b id="napInfoAmount" style="color:var(--gold);">—</b></div>
+          <div class="bank-row">📝 Nội dung CK bắt buộc:</div>
+          <div class="nap-content-code" id="napInfoContent" onclick="copyContent()">—</div>
+          <p class="copy-hint">(Click vào ô trên để sao chép nhanh)</p>
+        </div>
+        <div class="nap-zalo-note">
+          <p>✅ Sau khi chuyển khoản, nếu không thấy tiền cộng sau 1-2 phút, vui lòng liên hệ KTV.</p>
+          <p style="margin-top:8px;">📱 <strong>Zalo KTV:</strong> <a href="https://zalo.me/0908967936" target="_blank">0908967936</a></p>
+        </div>
+        <button class="sbtn gold" style="margin-top:16px;" onclick="resetNap()">‹ QUAY LẠI BƯỚC 1</button>
+      </div>
+      <button class="nap-close-btn" onclick="closeNap()">✖ ĐÓNG CỬA SỔ NẠP TIỀN</button>
+    </div>
+  </div>
+</div>
+
+<!-- AUTH MODAL -->
+<div class="auth-modal-ov" id="authModal">
+  <div class="auth-modal-box">
+    <div class="auth-modal-top">
+      <h2>🔑 XÁC THỰC THÀNH VIÊN</h2>
+      <button class="auth-close" onclick="closeAuth()">✕</button>
+    </div>
+    <div class="auth-modal-body">
+      <div class="auth-tabs">
+        <button class="auth-tab" id="tabLogin" onclick="switchAuthTab('login')">ĐĂNG NHẬP</button>
+        <button class="auth-tab" id="tabRegister" onclick="switchAuthTab('register')">ĐĂNG KÝ MỚI</button>
+      </div>
+      <div id="authMsgBox" style="display:none;"></div>
+      <div class="auth-form" id="formLogin">
+        <div class="fg"><label>TÊN ĐĂNG NHẬP</label><input type="text" id="loginUser" placeholder="Nhập tên tài khoản..."></div>
+        <div class="fg"><label>MẬT KHẨU</label><input type="password" id="loginPass" placeholder="Nhập mật khẩu..." onkeydown="if(event.key==='Enter')doLogin()"></div>
+        <button class="sbtn cyan" onclick="doLogin()">🔓 ĐĂNG NHẬP NGAY ›</button>
+        <div style="text-align:center;margin-top:14px;">
+          <a href="#" onclick="openForgotModal();return false;" style="font-size:12px;color:var(--accent2);text-decoration:none;font-family:'Orbitron',monospace;letter-spacing:1px;">🔑 Quên mật khẩu?</a>
+        </div>
+      </div>
+      <div class="auth-form" id="formRegister">
+        <div class="fg"><label>HỌ VÀ TÊN THẬT</label><input type="text" id="regFullname" placeholder="Ví dụ: Nguyễn Văn A"></div>
+        <div class="fg"><label>TÊN ĐĂNG NHẬP</label><input type="text" id="regUser" placeholder="Tối thiểu 4 ký tự, không dấu..."></div>
+        <div class="fg"><label>EMAIL (DÙNG ĐỂ XÁC NHẬN & KHÔI PHỤC)</label><input type="email" id="regEmail" placeholder="example@gmail.com"></div>
+        <div class="fg"><label>MẬT KHẨU</label><input type="password" id="regPass" placeholder="Tối thiểu 6 ký tự..."></div>
+        <div class="fg"><label>XÁC NHẬN MẬT KHẨU</label><input type="password" id="regPassConfirm" placeholder="Nhập lại mật khẩu..."></div>
+        <button class="sbtn cyan" id="btnSubmitRegister" onclick="doRegister()">🚀 TẠO TÀI KHOẢN NGAY ›</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SUCCESS MODAL -->
+<div class="success-modal-ov" id="successModal">
+  <div class="success-modal-box">
+    <div class="success-top"><h2>🎉 THANH TOÁN THÀNH CÔNG 🎉</h2></div>
+    <div class="success-body">
+      <div style="font-size:48px;text-align:center;margin-bottom:14px;">📦</div>
+      <div class="success-item"><div class="si-label">SẢN PHẨM ĐÃ SỞ HỮU</div><div class="si-val" id="suc-name">—</div></div>
+      <div class="success-item"><div class="si-label">💰 SỐ DƯ CÒN LẠI</div><div class="si-val" id="suc-balance" style="color:var(--gold);">—</div></div>
+      <div id="suc-file-section" style="display:none;">
+        <div class="success-item"><div class="si-label">🔗 LINK TẢI FILE</div><div class="si-val link" id="suc-link">—</div></div>
+        <a href="#" id="suc-dl-btn" class="success-dl-btn" target="_blank">⬇️ TẢI FILE NGAY</a>
+      </div>
+      <div id="suc-video-section" class="success-video-wrap" style="display:none;">
+        <div class="si-label">🎬 VIDEO HƯỚNG DẪN CÀI ĐẶT</div>
+        <div id="suc-video-frame"></div>
+      </div>
+      <button class="buy-cancel-btn" style="margin-top:14px;width:100%;" onclick="closeSuccess()">✖ ĐÓNG</button>
+      <p style="text-align:center;margin-top:12px;font-size:12px;color:var(--dim);">⚠️ Thắc mắc liên hệ Zalo KTV: <strong style="color:var(--gold);">0908967936</strong></p>
+    </div>
+  </div>
+</div>
+
+<!-- BANNER -->
+<div class="ad-banner">⚡ SHOP KYRA – BÁN FILE UY TÍN · NẠP TIỀN MUA HÀNG TỰ ĐỘNG · LIÊN HỆ KTV: 0908967936 ⚡</div>
+
+<!-- NAV -->
+<nav>
+  <a class="logo" href="#" onclick="showPage('home');return false;">
+    <span class="logo-text">SHOP<span>KYRA</span></span>
+  </a>
+  <div class="nav-right">
+    <a href="#" class="nbtn blue" onclick="showPage('home');return false;">🏠 TRANG CHỦ</a>
+    <a href="#" class="nbtn green" onclick="openNap();return false;">💳 NẠP TIỀN</a>
+    <a href="#" class="nbtn" onclick="showPage('policy');return false;">📜 CHÍNH SÁCH</a>
+    <a href="#" class="nbtn gold" onclick="showPage('storage');return false;">📦 KHO LƯU TRỮ</a>
+    <a href="#" class="nbtn" style="border-color:var(--gold);color:var(--gold);" onclick="showPage('contact');return false;">📞 LIÊN HỆ</a>
+    <span id="navAuth"></span>
+  </div>
+</nav>
+
+<!-- MARQUEE -->
+<div class="marquee-bar">
+  <div class="marquee-inner">
+    📢 Chào mừng đến với <span>Shop Kyra</span> – Hệ thống phân phối file số uy tín hàng đầu Việt Nam. Nạp tiền – Click mua – Nhận link tải ngay! Hỗ trợ 24/7 qua Zalo KTV: <span>0908967936</span>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="msg success fade-in" id="globalMsg" style="display:none;"></div>
+
+  <!-- HOME PAGE -->
+  <div id="page-home">
+    <div class="hero fade-in">
+      <div class="hero-badge">🏆 HỆ THỐNG PHÂN PHỐI FILE CHUYÊN NGHIỆP</div>
+      <h1>SHOP KYRA<br>UY TÍN SỐ 1</h1>
+      <p>Cung cấp file số chất lượng cao, giao hàng tự động tức thì, bảo hành 7 ngày, hỗ trợ kỹ thuật 24/7.</p>
+      <div class="hero-stats">
+        <div><div class="hstat-num">50K+</div><div class="hstat-label">Giao dịch</div></div>
+        <div><div class="hstat-num">25K+</div><div class="hstat-label">Thành viên</div></div>
+        <div><div class="hstat-num">100%</div><div class="hstat-label">Uy tín</div></div>
+        <div><div class="hstat-num">7 Ngày</div><div class="hstat-label">Bảo hành</div></div>
+      </div>
+      <div class="hero-btns">
+        <a href="#sp" class="hbtn main">🛒 XEM SẢN PHẨM</a>
+        <a href="#" class="hbtn sec" onclick="openNap();return false;">💳 NẠP TIỀN VÀO TÀI KHOẢN</a>
+      </div>
+    </div>
+
+    <div class="info-grid fade-in" style="margin-bottom:48px;">
+      <div class="info-card"><div class="info-card-icon">⚡</div><div class="info-card-title">XỬ LÝ SIÊU TỐC</div><div class="info-card-desc">Hệ thống tự động trừ tiền ví và hiển thị link tải ngay lập tức. Không cần chờ duyệt thủ công.</div></div>
+      <div class="info-card"><div class="info-card-icon">🛡️</div><div class="info-card-title">BẢO HÀNH 7 NGÀY</div><div class="info-card-desc">Cam kết bảo hành đầy đủ trong 7 ngày. Hỗ trợ đổi trả hoặc nâng cấp miễn phí nếu có lỗi.</div></div>
+      <div class="info-card"><div class="info-card-icon">💬</div><div class="info-card-title">HỖ TRỢ 24/7</div><div class="info-card-desc">Mọi thắc mắc liên hệ Zalo KTV 0908967936 để được hỗ trợ nhanh nhất.</div></div>
+      <div class="info-card"><div class="info-card-icon">🔒</div><div class="info-card-title">BẢO MẬT TUYỆT ĐỐI</div><div class="info-card-desc">Thông tin tài khoản và giao dịch được bảo mật theo tiêu chuẩn cao nhất.</div></div>
+    </div>
+
+    <div id="sp" class="fade-in">
+      <div class="sec-title">🛒 KHO SẢN PHẨM <span style="font-size:10px;color:var(--dim);font-weight:400;">— Đăng nhập để mua hàng</span></div>
+      <div class="cat-tabs" id="catTabs"></div>
+      <div id="prod-grid" class="prod-grid"></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:40px;" class="fade-in">
+      <div class="tx-section">
+        <div class="tx-section-title">📈 NẠP TIỀN MỚI NHẤT</div>
+        <div class="tx-feed" id="napFeedHome"></div>
+      </div>
+      <div class="tx-section">
+        <div class="tx-section-title" style="color:var(--gold);">🛒 MUA HÀNG MỚI NHẤT</div>
+        <div class="tx-feed tx-buy-feed" id="buyFeedHome"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTACT PAGE -->
+  <div id="page-contact" style="display:none;">
+    <div class="page-panel fade-in">
+      <h2>📞 THÔNG TIN LIÊN HỆ</h2>
+      <div class="contact-item">
+        <div class="contact-icon">📱</div>
+        <div>
+          <div class="contact-label">ZALO KTV – HỖ TRỢ KỸ THUẬT & MỌI THẮC MẮC</div>
+          <div class="contact-val"><a href="https://zalo.me/0908967936" target="_blank">0908967936</a></div>
+        </div>
+      </div>
+      <div class="contact-item">
+        <div class="contact-icon">💬</div>
+        <div>
+          <div class="contact-label">NHẮN TIN TRỰC TIẾP QUA ZALO</div>
+          <div class="contact-val"><a href="https://zalo.me/0908967936" target="_blank">Mở Zalo Chat ngay</a></div>
+        </div>
+      </div>
+      <p style="margin-top:16px;text-align:center;">⚠️ Nếu gặp lỗi trong quá trình nạp ví hoặc tải file, chụp ảnh giao dịch và liên hệ <strong style="color:var(--gold);">Zalo KTV: 0908967936</strong> để được xử lý ngay.</p>
+    </div>
+  </div>
+
+  <!-- POLICY PAGE -->
+  <div id="page-policy" style="display:none;">
+    <div class="page-panel fade-in">
+      <h2>📜 CHÍNH SÁCH CUNG CẤP & BẢO HÀNH FILE</h2>
+      <p>1. <strong>Quy định nạp tiền:</strong> Khách hàng tự nạp tiền vào ví tài khoản trước khi mua file. Sau khi chuyển khoản, liên hệ Zalo KTV để được cộng tiền. Tiền đã nạp không thể quy đổi lại thành tiền mặt.</p>
+      <p>2. <strong>Quy định mua hàng:</strong> Hệ thống tự động kiểm tra số dư và trừ ví ngay khi ấn đồng ý mua. Tài khoản phải có đủ số dư. Bạn nhận link tải file ngay sau khi thanh toán.</p>
+      <p>3. <strong>Chính sách bảo hành:</strong> Toàn bộ file bán ra được bảo hành và đổi mới trong 7 ngày nếu xảy ra lỗi.</p>
+      <p>4. <strong>Quyền thu hồi:</strong> Nghiêm cấm hành vi chia sẻ, phân phối lại file. Tài khoản vi phạm sẽ bị khóa vĩnh viễn.</p>
+      <p>5. <strong>Hỗ trợ kỹ thuật:</strong> Mọi thắc mắc liên hệ Zalo KTV: <strong style="color:var(--gold);">0908967936</strong>. Đội ngũ làm việc 24/7.</p>
+    </div>
+  </div>
+
+  <!-- STORAGE PAGE -->
+  <div id="page-storage" style="display:none;">
+    <div class="page-panel fade-in" style="max-width:900px;">
+      <h2>📦 KHO LƯU TRỮ FILE ĐÃ MUA</h2>
+      <div id="storageContent"></div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD PAGE -->
+  <div id="page-dashboard" style="display:none;">
+    <div class="dash-layout fade-in">
+      <div class="dash-sidebar">
+        <a href="#" class="active" id="dashMenuOverview" onclick="switchDashTab('overview');return false;">📊 Tổng Quan Tài Khoản</a>
+        <a href="#" id="dashMenuProfile" onclick="switchDashTab('profile');return false;">✏️ Cập Nhật Họ Tên</a>
+        <a href="#" id="dashMenuAdmin" style="display:none;color:var(--gold);font-weight:bold;border-bottom:1px solid var(--gold);" onclick="switchDashTab('admin');return false;">👑 [Admin] Quản Lý Thành Viên</a>
+        <a href="#" id="dashMenuAccounts" style="display:none;color:#00d4ff;font-weight:bold;" onclick="switchDashTab('accounts');return false;">🧾 Quản Lý Tài Khoản</a>
+        <a href="#" onclick="openNap();return false;">💳 Nạp Tiền Vào Ví</a>
+        <a href="#" onclick="showPage('storage');return false;">📦 Kho Tệp Đã Mua</a>
+        <a href="#" onclick="showPage('home');return false;">🛒 Tiếp Tục Mua Hàng</a>
+      </div>
+      <div class="dash-main" id="dashMain"></div>
+    </div>
+  </div>
+</div>
+
+<!-- OTP VERIFICATION MODAL -->
+<div class="otp-modal-ov" id="otpModal">
+  <div class="otp-modal-box">
+    <div class="otp-modal-top">
+      <div style="font-size:32px;margin-bottom:8px;">📧</div>
+      <h2>XÁC NHẬN EMAIL</h2>
+      <p style="font-size:12px;color:rgba(255,255,255,.6);margin-top:6px;">Mã OTP đã được gửi đến email của bạn</p>
+    </div>
+    <div class="otp-modal-body">
+      <p style="font-size:13px;color:var(--dim);text-align:center;margin-bottom:6px;">Nhập mã <strong style="color:var(--accent);">6 chữ số</strong> được gửi đến:</p>
+      <p style="font-size:14px;color:var(--gold);text-align:center;font-weight:700;margin-bottom:16px;" id="otpEmailDisplay">—</p>
+      <div class="otp-input-row">
+        <input class="otp-digit" id="otp0" maxlength="1" type="text" inputmode="numeric" oninput="otpNext(0)" onkeydown="otpBack(event,0)">
+        <input class="otp-digit" id="otp1" maxlength="1" type="text" inputmode="numeric" oninput="otpNext(1)" onkeydown="otpBack(event,1)">
+        <input class="otp-digit" id="otp2" maxlength="1" type="text" inputmode="numeric" oninput="otpNext(2)" onkeydown="otpBack(event,2)">
+        <input class="otp-digit" id="otp3" maxlength="1" type="text" inputmode="numeric" oninput="otpNext(3)" onkeydown="otpBack(event,3)">
+        <input class="otp-digit" id="otp4" maxlength="1" type="text" inputmode="numeric" oninput="otpNext(4)" onkeydown="otpBack(event,4)">
+        <input class="otp-digit" id="otp5" maxlength="1" type="text" inputmode="numeric" oninput="otpNext(5)" onkeydown="otpBack(event,5)">
+      </div>
+      <div class="otp-timer">Mã hết hạn sau: <span id="otpTimerDisplay">05:00</span></div>
+      <div id="otpMsgBox" style="display:none;padding:10px 14px;margin-bottom:14px;font-size:13px;font-weight:600;border-left:3px solid;"></div>
+      <button class="sbtn cyan" onclick="verifyOTP()">✅ XÁC NHẬN MÃ OTP ›</button>
+      <button class="sbtn" style="background:transparent;border:1px solid var(--border2);color:var(--dim);margin-top:8px;font-family:'Orbitron',monospace;font-size:10px;letter-spacing:2px;" onclick="resendOTP()">🔄 GỬI LẠI MÃ</button>
+      <button class="sbtn" style="background:transparent;border:1px solid var(--border2);color:var(--dim2);margin-top:6px;font-family:'Orbitron',monospace;font-size:9px;" onclick="closeOTPModal()">✕ HỦY ĐĂNG KÝ</button>
+    </div>
+  </div>
+</div>
+
+<!-- FORGOT PASSWORD MODAL -->
+<div class="forgot-modal-ov" id="forgotModal">
+  <div class="forgot-modal-box">
+    <div class="forgot-modal-top">
+      <div style="font-size:32px;margin-bottom:8px;">🔑</div>
+      <h2>KHÔI PHỤC MẬT KHẨU</h2>
+    </div>
+    <div class="forgot-modal-body">
+      <div id="forgotStep1">
+        <p style="font-size:13px;color:var(--dim);text-align:center;margin-bottom:18px;line-height:1.8;">Nhập email đã đăng ký để nhận mã OTP khôi phục tài khoản.</p>
+        <div id="forgotMsgBox" style="display:none;padding:10px 14px;margin-bottom:14px;font-size:13px;font-weight:600;border-left:3px solid;"></div>
+        <div class="fg"><label>EMAIL ĐÃ ĐĂNG KÝ</label><input type="email" id="forgotEmail" placeholder="example@gmail.com"></div>
+        <button class="sbtn pink" id="btnSendForgotOTP" onclick="sendForgotOTP()">📧 GỬI MÃ OTP KHÔI PHỤC ›</button>
+        <button class="sbtn" style="background:transparent;border:1px solid var(--border2);color:var(--dim);margin-top:8px;font-family:'Orbitron',monospace;font-size:10px;" onclick="closeForgotModal()">✕ ĐÓNG</button>
+      </div>
+      <div id="forgotStep2" style="display:none;">
+        <p style="font-size:13px;color:var(--dim);text-align:center;margin-bottom:8px;">Nhập mã OTP được gửi đến email:</p>
+        <p style="font-size:14px;color:var(--gold);text-align:center;font-weight:700;margin-bottom:14px;" id="forgotEmailDisplay">—</p>
+        <div id="forgotOTPMsgBox" style="display:none;padding:10px 14px;margin-bottom:10px;font-size:13px;font-weight:600;border-left:3px solid;"></div>
+        <div class="otp-input-row">
+          <input class="otp-digit" id="fotp0" maxlength="1" type="text" inputmode="numeric" oninput="fotpNext(0)" onkeydown="fotpBack(event,0)">
+          <input class="otp-digit" id="fotp1" maxlength="1" type="text" inputmode="numeric" oninput="fotpNext(1)" onkeydown="fotpBack(event,1)">
+          <input class="otp-digit" id="fotp2" maxlength="1" type="text" inputmode="numeric" oninput="fotpNext(2)" onkeydown="fotpBack(event,2)">
+          <input class="otp-digit" id="fotp3" maxlength="1" type="text" inputmode="numeric" oninput="fotpNext(3)" onkeydown="fotpBack(event,3)">
+          <input class="otp-digit" id="fotp4" maxlength="1" type="text" inputmode="numeric" oninput="fotpNext(4)" onkeydown="fotpBack(event,4)">
+          <input class="otp-digit" id="fotp5" maxlength="1" type="text" inputmode="numeric" oninput="fotpNext(5)" onkeydown="fotpBack(event,5)">
+        </div>
+        <div class="otp-timer">Mã hết hạn sau: <span id="forgotTimerDisplay">05:00</span></div>
+        <button class="sbtn pink" onclick="verifyForgotOTP()">✅ XÁC NHẬN MÃ OTP ›</button>
+      </div>
+      <div id="forgotStep3" style="display:none;">
+        <p style="font-size:13px;color:var(--green);text-align:center;margin-bottom:16px;">✅ Xác nhận thành công! Đặt lại mật khẩu mới.</p>
+        <div id="forgotNewPwMsgBox" style="display:none;padding:10px 14px;margin-bottom:10px;font-size:13px;font-weight:600;border-left:3px solid;"></div>
+        <div class="fg"><label>MẬT KHẨU MỚI</label><input type="password" id="newPw1" placeholder="Tối thiểu 6 ký tự..."></div>
+        <div class="fg"><label>XÁC NHẬN MẬT KHẨU MỚI</label><input type="password" id="newPw2" placeholder="Nhập lại mật khẩu mới..."></div>
+        <button class="sbtn pink" onclick="doResetPassword()">🔐 ĐẶT LẠI MẬT KHẨU ›</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span class="footer-logo">SHOP<span>KYRA</span></span>
+  <div class="footer-links">
+    <a href="#" onclick="showPage('home');return false;">🏠 Trang Chủ</a>
+    <a href="#" onclick="showPage('contact');return false;">📞 Liên Hệ</a>
+    <a href="#" onclick="showPage('policy');return false;">📜 Chính Sách</a>
+    <a href="#" onclick="openAuth('login');return false;">🔑 Đăng Nhập</a>
+    <a href="#" onclick="openAuth('register');return false;">🚀 Đăng Ký</a>
+  </div>
+  <div class="footer-socials">
+    <a class="social-btn" href="https://zalo.me/0908967936" target="_blank">📱 Zalo KTV: 0908967936</a>
+  </div>
+  <p>© 2026 SHOP KYRA · Mọi thắc mắc liên hệ <strong style="color:var(--gold);">Zalo KTV: 0908967936</strong></p>
+</footer>
+
+<div class="zalo-float">
+  <a href="https://zalo.me/0908967936" target="_blank" class="zalo-float-btn">
+    <span style="font-size:20px;">💬</span>
+    <span><span class="zalo-float-label">Mọi thắc mắc liên hệ</span>Zalo KTV: 0908967936</span>
+  </a>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════
+// ⚙️ CẤU HÌNH ADMIN
+// ════════════════════════════════════════════════════
+const ADMIN_USERNAME = 'admin';
+const ADMIN_PASSWORD = 'admin123';
+
+// EmailJS config
+const EJS_SERVICE  = 'service_bdb4zsg';
+const EJS_TEMPLATE = 'template_awc9zo9';
+const EJS_PUBLIC   = 'oVC_LQy5IkBPxwcPR';
+
+// ════════════════════════════════════════════════════
+// DANH SÁCH SẢN PHẨM
+// ════════════════════════════════════════════════════
+
+const PRODUCTS = {
+
+  // ── DANH MỤC 1 ──
+  danhmuc1: {
+    label: '🎯 IMAZING',
+    items: [
+
+      {
+        name: 'Aim Neck',
+        desc: '✔️ Trả File tự động: Hệ thống sẽ gửi Link tải ngay sau khi thanh toán thành công.',
+        price: 150000,
+        tag: '🔥 HOT',
+        tagcol: 'red',
+        image: 'https://i.ibb.co/zhtMDR4P/nh-ch-p-m-n-h-nh-2026-05-18-222013.png',
+        link: 'https://www.mediafire.com/file/v70jqnuwfqfshpa/FFM_AIM_NECK_20-5.imazingapp/file',
+        video: 'https://youtu.be/juDqKh0Qk2A?si=vuy8Otgd-LJtwemg'
+      },
+
+      {
+        name: 'Aim Drag',
+        desc: '✔️ Phiên bản nâng cấp hỗ trợ kéo tâm ổn định và mượt mà.',
+        price: 150000,
+        tag: '👑 VIP',
+        tagcol: 'gold',
+        image: 'https://i.ibb.co/hJDQ2S9v/nh-ch-p-m-n-h-nh-2026-05-18-222420.png',
+        link: 'https://www.mediafire.com/file/zn3tp81n8ukucpw/FFM_DRAGxAZRA.imazingapp/file',
+        video: 'https://youtu.be/juDqKh0Qk2A?si=vuy8Otgd-LJtwemg'
+      },
+
+      {
+        name: 'Aim Chest',
+        desc: '✔️ Hỗ trợ kéo tâm vào ngực ổn định và mượt.',
+        price: 150000,
+        tag: '⚡ NEW',
+        tagcol: 'cyan',
+        image: 'https://i.ibb.co/bRg34Z1V/nh-ch-p-m-n-h-nh-2026-05-18-222409.png',
+        link: 'https://www.mediafire.com/file/z7pfee6ixk9oiau/FFM_CHESTxAZRA.imazingapp/file',
+        video: 'https://youtu.be/juDqKh0Qk2A?si=vuy8Otgd-LJtwemg'
+      },
+
+      {
+        name: 'Aim Body',
+        desc: '✔️ Aim body hỗ trợ kéo tâm toàn thân cực ổn.',
+        price: 150000,
+        tag: '🔥 HOT',
+        tagcol: 'red',
+        image: 'https://i.ibb.co/6JqVCwTf/nh-ch-p-m-n-h-nh-2026-05-18-222434.png',
+        link: 'https://www.mediafire.com/file/yuriyse4ryf8u09/FFTH_AIM_BODY_24-5.imazingapp/file',
+        video: 'https://youtu.be/juDqKh0Qk2A?si=vuy8Otgd-LJtwemg'
+      },
+
+      {
+        name: 'Aim R8',
+        desc: '✔️ Hỗ trợ kéo tâm cực mạnh dành cho R8.',
+        price: 150000,
+        tag: '🔥 HOT',
+        tagcol: 'red',
+        image: 'https://i.ibb.co/8L3XmzyH/nh-ch-p-m-n-h-nh-2026-05-24-224313.png',
+        link: 'https://www.mediafire.com/file/8fjcpnogw4pelpr/FFM_R8xAZRA.imazingapp/file',
+        video: 'https://youtu.be/juDqKh0Qk2A?si=vuy8Otgd-LJtwemg'
+      }
+
+    ]
+  },
+
+  // ── DANH MỤC 2 ──
+danhmuc2: {
+  label: '⚙️ REGEDIT',
+  items: [
+
+    {
+      name: 'Regedit FPS',
+      desc: 'Tối ưu FPS và giảm giật lag khi chơi game.',
+      price: 100000,
+      tag: '⚡ NHANH',
+      tagcol: 'cyan',
+      image: 'https://i.ibb.co/hxvbhws8/nh-ch-p-m-n-h-nh-2026-05-18-223158.png',
+      link: 'https://www.mediafire.com/file/o0xb3z4fxc6a392/MK_baoaimlock.tar/file',
+      video: 'https://www.mediafire.com/file/eixksz7qhlygtcx/C%25C3%25A1ch_c%25C3%25A0i_reg_adr_by_kyra.mp4/file'
+    },
+
+    {
+      name: 'Regedit Full Setting',
+      desc: 'Bản regedit full setting dành cho game thủ.',
+      price: 150000,
+      tag: '👑 PRO',
+      tagcol: 'gold',
+      image: 'https://i.ibb.co/bnwL8wR/nh-ch-p-m-n-h-nh-2026-05-18-223002.png',
+      link: 'https://www.mediafire.com/file/5q01pqa0uj6n4fb/Kyra_.Dat/file',
+      video: 'https://www.mediafire.com/file/eixksz7qhlygtcx/C%25C3%25A1ch_c%25C3%25A0i_reg_adr_by_kyra.mp4/file'
+    },
+
+    {
+      name: 'Regedit Kyra',
+      desc: 'Tối ưu FPS, fix rung tâm và lố đầu.',
+      price: 150000,
+      tag: '⚡ HOT',
+      tagcol: 'cyan',
+      image: 'https://i.ibb.co/qYsnWf0Y/kyra.jpg',
+      link: 'https://www.mediafire.com/file/q6j6iarvimktbwh/Super_Aimlock.zip/file',
+      video: 'https://www.mediafire.com/file/mog9gwpxts1py3e/gh%25C3%25ACm_t%25C3%25A2m_adr.mp4/file'
+    },
+
+    {
+      name: 'Kayrin Performance Ultra',
+      desc: 'Bản regedit full setting dành cho game thủ cao cấp.',
+      price: 200000,
+      tag: '👑 VIP',
+      tagcol: 'gold',
+      image: 'https://i.ibb.co/yFBTSbKP/nh-ch-p-m-n-h-nh-2026-05-18-223013.png',
+      link: 'https://www.mediafire.com/file/vjycbpwfxv7nyra/FFTH_REGEDIT_ANDROID_OB53_BY_BAOAIMLOCK.zip/file',
+      video: 'https://www.youtube.com/shorts/Fh4vp6rgRHM'
+    }
+
+  ]
+},
+
+
+  // ── DANH MỤC 3 ──
+danhmuc3: {
+  label: '📱 FILZA',
+  items: [
+
+    {
+      name: 'AIM BODY FULL XOÁ MÁU VÀNG',
+      desc: 'Aim body full xóa máu vàng, chơi mượt hơn.',
+      price: 150000,
+      tag: '📱 MOBILE',
+      tagcol: 'orange',
+      image: 'https://i.ibb.co/whd7KZVC/nh-ch-p-m-n-h-nh-2026-05-18-223622.png',
+      link: 'https://www.mediafire.com/file/ia30229frg6ikhz/cache_res_%25283%2529.CfnFf59sr1SbsqQ6JqTKsEusjKs%257E3D/file',
+      video: 'https://www.mediafire.com/file/hezdxfy0z5aq2el/C%25C3%25A0i_cachres_tr%25C3%25AAn_ios.mp4/file'
+    },
+
+    {
+      name: 'FFM AIM MAGIC',
+      desc: 'FFM aim magic, hỗ trợ cài đặt nhanh.',
+      price: 150000,
+      tag: '📱 MOBILE',
+      tagcol: 'orange',
+      image: 'https://i.ibb.co/whd7KZVC/nh-ch-p-m-n-h-nh-2026-05-18-223622.png',
+      link: 'https://www.mediafire.com/file/vy09mcfgwzzhz97/cache_res_%25282%2529.CfnFf59sr1SbsqQ6JqTKsEusjKs%257E3D/file',
+      video: 'https://www.mediafire.com/file/hezdxfy0z5aq2el/C%25C3%25A0i_cachres_tr%25C3%25AAn_ios.mp4/file'
+    },
+
+    {
+      name: 'Aimlock ffth',
+      desc: 'Aimlock ffth cơ bản tối ưu máy.',
+      price: 150000,
+      tag: '📱 MOBILE',
+      tagcol: 'orange',
+      image: 'https://i.ibb.co/whd7KZVC/nh-ch-p-m-n-h-nh-2026-05-18-223622.png',
+      link: 'https://www.mediafire.com/file/yfm6q9jzdsjcjrc/assetindexer.H5ak1JM1Eck%257E2FxRcJrEp%257E2FMzeuqmY%257E3D/file',
+      video: 'https://www.mediafire.com/file/hezdxfy0z5aq2el/C%25C3%25A0i_cachres_tr%25C3%25AAn_ios.mp4/file'
+    },
+
+    {
+      name: 'Aimlock head ffm',
+      desc: 'Aimlock headshot FFM, hỗ trợ cài đặt nhanh.',
+      price: 150000,
+      tag: '📱 MOBILE',
+      tagcol: 'orange',
+      image: 'https://i.ibb.co/whd7KZVC/nh-ch-p-m-n-h-nh-2026-05-18-223622.png',
+      link: 'https://www.mediafire.com/file/yfm6q9jzdsjcjrc/assetindexer.H5ak1JM1Eck%257E2FxRcJrEp%257E2FMzeuqmY%257E3D/file',
+      video: 'https://www.mediafire.com/file/hezdxfy0z5aq2el/C%25C3%25A0i_cachres_tr%25C3%25AAn_ios.mp4/file'
+    }
+
+  ]
+  }
+
+};
+
+// ════════════════════════════════════════════════════
+// KẾT THÚC PHẦN SẢN PHẨM
+// ════════════════════════════════════════════════════
+
+// DATABASE (LOCALSTORAGE)
+const INITIAL_USERS = [{
+  id:'u_admin', username:'admin', fullname:'Admin Hệ Thống',
+  email:'admin@shopkyra.com', password: ADMIN_PASSWORD,
+  balance:99999999, ip:'127.0.0.1', created_at:'01/01/2026',
+  purchase_history:[], role:'admin'
+}];
+
+function getUsers(){
+  let u=localStorage.getItem('shopkyra_users');
+  if(!u){ localStorage.setItem('shopkyra_users',JSON.stringify(INITIAL_USERS)); return JSON.parse(JSON.stringify(INITIAL_USERS)); }
+  let arr=JSON.parse(u);
+  if(!arr.find(x=>x.username==='admin')){ arr.unshift(INITIAL_USERS[0]); saveUsers(arr); }
+  return arr;
+}
+function saveUsers(arr){ localStorage.setItem('shopkyra_users',JSON.stringify(arr)); }
+function getUser(){ let u=localStorage.getItem('shopkyra_curr'); return u?JSON.parse(u):null; }
+function saveUser(obj){ if(!obj) localStorage.removeItem('shopkyra_curr'); else localStorage.setItem('shopkyra_curr',JSON.stringify(obj)); }
+
+let currentUser=getUser();
+let currentCat=Object.keys(PRODUCTS)[0];
+let pendingBuy=null;
+
+function fmt(n){ return new Intl.NumberFormat('vi-VN',{style:'currency',currency:'VND'}).format(n); }
+function isAdmin(u){ return u&&(u.username===ADMIN_USERNAME||u.role==='admin'); }
+
+window.addEventListener('DOMContentLoaded',()=>{
+  getUsers(); renderNav(); buildCatTabs(); renderProducts(); genMockTransactions(); showPage('home');
+  if(!sessionStorage.getItem('kyra_welcome_seen')){ document.getElementById('welcomeModal').style.display='flex'; }
+});
+
+function closeWelcome(){
+  sessionStorage.setItem('kyra_welcome_seen','1');
+  document.getElementById('welcomeModal').style.display='none';
+}
+
+function renderNav(){
+  const box=document.getElementById('navAuth');
+  if(currentUser){
+    box.innerHTML=`<div class="uchip"><span class="un">👤 ${currentUser.username.toUpperCase()}</span><span class="ub">💰 ${fmt(currentUser.balance)}</span></div>
+    <a href="#" class="nbtn gold" onclick="showPage('dashboard');return false;">📊 ĐIỀU KHIỂN</a>
+    <a href="#" class="nbtn red" onclick="doLogout();return false;">✖ ĐĂNG XUẤT</a>`;
+  } else {
+    box.innerHTML=`<a href="#" class="nbtn" onclick="openAuth('login');return false;">🔑 ĐĂNG NHẬP</a>
+    <a href="#" class="nbtn gold" onclick="openAuth('register');return false;">🚀 ĐĂNG KÝ</a>`;
+  }
+}
+
+function buildCatTabs(){
+  const tabs=document.getElementById('catTabs'); tabs.innerHTML='';
+  Object.keys(PRODUCTS).forEach((key,i)=>{
+    const btn=document.createElement('button');
+    btn.className='cat-tab'+(i===0?' active':'');
+    btn.textContent=PRODUCTS[key].label;
+    btn.onclick=function(){ switchCat(key,this); };
+    tabs.appendChild(btn);
+  });
+}
+
+function renderProducts(){
+  const grid=document.getElementById('prod-grid'); grid.innerHTML='';
+  const cat=PRODUCTS[currentCat];
+  if(!cat||!cat.items.length){ grid.innerHTML='<p style="color:var(--dim);padding:20px;">Chưa có sản phẩm.</p>'; return; }
+  cat.items.forEach((p,idx)=>{
+    let owned=currentUser&&currentUser.purchase_history&&currentUser.purchase_history.some(h=>h.name===p.name);
+    const tagClass=p.tagcol||'cyan';
+    const btnsHtml=owned
+      ?`<button class="pbtn owned" onclick="openOwnedModal(${idx})">✅ XEM FILE & TẢI VỀ</button>`
+      :`<button class="pbtn buy" onclick="openBuyModal(${idx})">🛒 MUA NGAY</button>`;
+    grid.innerHTML+=`<div class="prod-card">
+      <img class="prod-img" src="${p.image}" alt="${p.name}" onerror="this.src='https://via.placeholder.com/400x170/0a0f1e/00d4ff?text=SHOP+KYRA'">
+      <span class="prod-tag ${tagClass}">${p.tag}</span>
+      <div class="prod-body">
+        <div class="prod-name">${p.name}</div>
+        <div class="prod-desc">${p.desc}</div>
+        <div class="prod-price">${fmt(p.price)}</div>
+        <div class="prod-btns">${btnsHtml}</div>
+      </div></div>`;
+  });
+}
+
+function switchCat(c,btn){
+  currentCat=c;
+  document.querySelectorAll('.cat-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active'); renderProducts();
+}
+
+function openAuth(tab){ document.getElementById('authModal').classList.add('open'); switchAuthTab(tab); }
+function closeAuth(){ document.getElementById('authModal').classList.remove('open'); document.getElementById('authMsgBox').style.display='none'; }
+function switchAuthTab(tab){
+  ['login','register'].forEach(t=>{
+    const cap=t.charAt(0).toUpperCase()+t.slice(1);
+    document.getElementById('tab'+cap).classList.toggle('active',t===tab);
+    document.getElementById('form'+cap).classList.toggle('active',t===tab);
+  });
+  document.getElementById('authMsgBox').style.display='none';
+}
+function showAuthMsg(text,type='error'){
+  const b=document.getElementById('authMsgBox'); b.className='auth-msg '+type; b.innerHTML=text; b.style.display='block';
+}
+
+
+// ════════════════════════════════════════════════════
+// OTP STATE
+// ════════════════════════════════════════════════════
+let otpData = null;       // {code, email, pendingUser, expiry}
+let otpTimerInterval = null;
+let forgotOtpData = null; // {code, email, userId, expiry}
+let forgotTimerInterval = null;
+
+function genOTPCode(){ return String(Math.floor(100000+Math.random()*900000)); }
+
+// ── SEND OTP via EmailJS ──
+async function sendOTPEmail(toEmail, toName, otpCode, subject_note){
+  return emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
+    to_email: toEmail,
+    to_name: toName,
+    otp_code: otpCode,
+    subject_note: subject_note || 'Xác nhận tài khoản Shop Kyra',
+    shop_name: 'SHOP KYRA',
+    message: 'Mã OTP của bạn là: ' + otpCode + '. Mã có hiệu lực trong 5 phút. KHÔNG chia sẻ mã này cho bất kỳ ai.'
+  });
+}
+
+// ── OTP INPUT UX ──
+function otpNext(i){
+  const v=document.getElementById('otp'+i).value.replace(/\D/g,'');
+  document.getElementById('otp'+i).value=v;
+  if(v&&i<5) document.getElementById('otp'+(i+1)).focus();
+}
+function otpBack(e,i){ if(e.key==='Backspace'&&!document.getElementById('otp'+i).value&&i>0) document.getElementById('otp'+(i-1)).focus(); }
+function fotpNext(i){
+  const v=document.getElementById('fotp'+i).value.replace(/\D/g,'');
+  document.getElementById('fotp'+i).value=v;
+  if(v&&i<5) document.getElementById('fotp'+(i+1)).focus();
+}
+function fotpBack(e,i){ if(e.key==='Backspace'&&!document.getElementById('fotp'+i).value&&i>0) document.getElementById('fotp'+(i-1)).focus(); }
+
+// ── OTP TIMER ──
+function startOTPTimer(displayId, interval_ref_setter, onExpiry){
+  let secs=300;
+  function tick(){
+    const m=Math.floor(secs/60), s=secs%60;
+    const el=document.getElementById(displayId);
+    if(el) el.textContent=(m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+    if(secs<=0){ clearInterval(window[interval_ref_setter]); if(onExpiry) onExpiry(); return; }
+    secs--;
+  }
+  tick();
+  window[interval_ref_setter]=setInterval(tick,1000);
+}
+
+// ════════════════════════════════════════════════════
+// ĐĂNG KÝ (với OTP xác nhận email)
+// ════════════════════════════════════════════════════
+async function doRegister(){
+  const fullname=document.getElementById('regFullname').value.trim();
+  const username=document.getElementById('regUser').value.trim().toLowerCase();
+  const email=document.getElementById('regEmail').value.trim().toLowerCase();
+  const pass=document.getElementById('regPass').value;
+  const confirm=document.getElementById('regPassConfirm').value;
+  if(!fullname||!username||!email||!pass){ showAuthMsg('❌ Vui lòng nhập đầy đủ tất cả các trường!'); return; }
+  if(username.length<4){ showAuthMsg('❌ Tên đăng nhập phải từ 4 ký tự trở lên!'); return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ showAuthMsg('❌ Email không hợp lệ!'); return; }
+  if(pass.length<6){ showAuthMsg('❌ Mật khẩu phải từ 6 ký tự trở lên!'); return; }
+  if(pass!==confirm){ showAuthMsg('❌ Mật khẩu xác nhận không trùng khớp!'); return; }
+  const users=getUsers();
+  if(users.find(u=>u.username===username)){ showAuthMsg('❌ Tên đăng nhập này đã tồn tại!'); return; }
+  if(users.find(u=>u.email&&u.email.toLowerCase()===email)){ showAuthMsg('❌ Email này đã được dùng để đăng ký!'); return; }
+  const btn=document.getElementById('btnSubmitRegister'); btn.disabled=true; btn.textContent='⏳ ĐANG GỬI OTP...';
+  const userIP = await getUserIP();
+  const code=genOTPCode();
+  try{
+    await sendOTPEmail(email, fullname, code, 'Xác nhận tài khoản Shop Kyra');
+    otpData={code, email, expiry:Date.now()+300000, pendingUser:{
+      id:'u_'+Date.now(), username, fullname, email, password:pass,
+      balance:0, ip:userIP, created_at:new Date().toLocaleDateString('vi-VN'),
+      purchase_history:[], role:'user'
+    }};
+    btn.disabled=false; btn.textContent='🚀 TẠO TÀI KHOẢN NGAY ›';
+    closeAuth();
+    openOTPModal(email);
+  }catch(err){
+    btn.disabled=false; btn.textContent='🚀 TẠO TÀI KHOẢN NGAY ›';
+    showAuthMsg('❌ Không gửi được email OTP! Kiểm tra lại địa chỉ email. Lỗi: '+(err.text||err));
+  }
+}
+
+function openOTPModal(email){
+  document.getElementById('otpEmailDisplay').textContent=email;
+  for(let i=0;i<6;i++) document.getElementById('otp'+i).value='';
+  document.getElementById('otpMsgBox').style.display='none';
+  document.getElementById('otpModal').classList.add('open');
+  clearInterval(window._otpInterval);
+  startOTPTimer('otpTimerDisplay','_otpInterval',()=>{
+    showOTPMsg('⏰ Mã OTP đã hết hạn! Vui lòng đăng ký lại.','error');
+  });
+  setTimeout(()=>document.getElementById('otp0').focus(),300);
+}
+function closeOTPModal(){ document.getElementById('otpModal').classList.remove('open'); clearInterval(window._otpInterval); otpData=null; }
+
+function showOTPMsg(text,type='error'){
+  const b=document.getElementById('otpMsgBox');
+  b.className='auth-msg '+type; b.innerHTML=text; b.style.display='block';
+}
+
+function verifyOTP(){
+  if(!otpData){ closeOTPModal(); return; }
+  const entered=[0,1,2,3,4,5].map(i=>document.getElementById('otp'+i).value).join('');
+  if(entered.length<6){ showOTPMsg('❌ Vui lòng nhập đủ 6 chữ số!'); return; }
+  if(Date.now()>otpData.expiry){ showOTPMsg('⏰ Mã OTP đã hết hạn! Vui lòng đăng ký lại.','error'); return; }
+  if(entered!==otpData.code){ showOTPMsg('❌ Mã OTP không đúng! Kiểm tra lại email.'); return; }
+  // OTP đúng → tạo tài khoản
+  const users=getUsers();
+  users.push(otpData.pendingUser);
+  saveUsers(users);
+  currentUser=otpData.pendingUser;
+  saveUser(currentUser);
+  closeOTPModal();
+  otpData=null;
+  renderNav();
+  showGlobalMsg('✅ Xác nhận email thành công! Chào mừng '+currentUser.fullname+' đến với Shop Kyra!','success');
+  showPage('dashboard');
+}
+
+async function resendOTP(){
+  if(!otpData){ return; }
+  const code=genOTPCode();
+  otpData.code=code; otpData.expiry=Date.now()+300000;
+  try{
+    await sendOTPEmail(otpData.email, otpData.pendingUser.fullname, code, 'Xác nhận tài khoản Shop Kyra');
+    showOTPMsg('✅ Đã gửi lại mã OTP mới!','success');
+    clearInterval(window._otpInterval);
+    startOTPTimer('otpTimerDisplay','_otpInterval',()=>{ showOTPMsg('⏰ Mã OTP đã hết hạn!','error'); });
+  }catch(err){ showOTPMsg('❌ Gửi lại thất bại: '+(err.text||err)); }
+}
+
+// ════════════════════════════════════════════════════
+// ĐĂNG NHẬP
+// ════════════════════════════════════════════════════
+function doLogin(){
+  const user=document.getElementById('loginUser').value.trim().toLowerCase();
+  const pass=document.getElementById('loginPass').value;
+  if(!user||!pass){ showAuthMsg('❌ Vui lòng điền đầy đủ thông tin!'); return; }
+  const users=getUsers();
+  const found=users.find(u=>u.username===user&&u.password===pass);
+  if(!found){ showAuthMsg('❌ Sai tên đăng nhập hoặc mật khẩu!'); return; }
+  currentUser=found; saveUser(found); renderNav(); closeAuth();
+  showGlobalMsg('✅ Đăng nhập thành công! Chào mừng '+found.fullname+'!','success');
+  showPage('dashboard');
+}
+
+// ════════════════════════════════════════════════════
+// QUÊN MẬT KHẨU
+// ════════════════════════════════════════════════════
+function openForgotModal(){
+  closeAuth();
+  document.getElementById('forgotStep1').style.display='block';
+  document.getElementById('forgotStep2').style.display='none';
+  document.getElementById('forgotStep3').style.display='none';
+  document.getElementById('forgotEmail').value='';
+  hideForgotMsg('forgotMsgBox');
+  document.getElementById('forgotModal').classList.add('open');
+}
+function closeForgotModal(){ document.getElementById('forgotModal').classList.remove('open'); clearInterval(window._forgotInterval); forgotOtpData=null; }
+
+function showForgotMsg(boxId, text, type='error'){
+  const b=document.getElementById(boxId);
+  b.className='auth-msg '+type; b.innerHTML=text; b.style.display='block';
+}
+function hideForgotMsg(boxId){ const b=document.getElementById(boxId); if(b) b.style.display='none'; }
+
+async function sendForgotOTP(){
+  const email=document.getElementById('forgotEmail').value.trim().toLowerCase();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ showForgotMsg('forgotMsgBox','❌ Email không hợp lệ!'); return; }
+  const users=getUsers();
+  const found=users.find(u=>u.email&&u.email.toLowerCase()===email);
+  if(!found){ showForgotMsg('forgotMsgBox','❌ Không tìm thấy tài khoản với email này!'); return; }
+  const btn=document.getElementById('btnSendForgotOTP'); btn.disabled=true; btn.textContent='⏳ ĐANG GỬI...';
+  const code=genOTPCode();
+  try{
+    await sendOTPEmail(email, found.fullname, code, 'Khôi phục mật khẩu Shop Kyra');
+    forgotOtpData={code, email, userId:found.id, expiry:Date.now()+300000};
+    btn.disabled=false; btn.textContent='📧 GỬI MÃ OTP KHÔI PHỤC ›';
+    document.getElementById('forgotEmailDisplay').textContent=email;
+    document.getElementById('forgotStep1').style.display='none';
+    document.getElementById('forgotStep2').style.display='block';
+    for(let i=0;i<6;i++) document.getElementById('fotp'+i).value='';
+    hideForgotMsg('forgotOTPMsgBox');
+    clearInterval(window._forgotInterval);
+    startOTPTimer('forgotTimerDisplay','_forgotInterval',()=>{
+      showForgotMsg('forgotOTPMsgBox','⏰ Mã OTP đã hết hạn! Vui lòng thử lại.','error');
+    });
+    setTimeout(()=>document.getElementById('fotp0').focus(),300);
+  }catch(err){
+    btn.disabled=false; btn.textContent='📧 GỬI MÃ OTP KHÔI PHỤC ›';
+    showForgotMsg('forgotMsgBox','❌ Không gửi được email! Lỗi: '+(err.text||err));
+  }
+}
+
+function verifyForgotOTP(){
+  if(!forgotOtpData){ return; }
+  const entered=[0,1,2,3,4,5].map(i=>document.getElementById('fotp'+i).value).join('');
+  if(entered.length<6){ showForgotMsg('forgotOTPMsgBox','❌ Vui lòng nhập đủ 6 chữ số!'); return; }
+  if(Date.now()>forgotOtpData.expiry){ showForgotMsg('forgotOTPMsgBox','⏰ Mã OTP đã hết hạn!','error'); return; }
+  if(entered!==forgotOtpData.code){ showForgotMsg('forgotOTPMsgBox','❌ Mã OTP không đúng!'); return; }
+  clearInterval(window._forgotInterval);
+  document.getElementById('forgotStep2').style.display='none';
+  document.getElementById('forgotStep3').style.display='block';
+  hideForgotMsg('forgotNewPwMsgBox');
+  document.getElementById('newPw1').value='';
+  document.getElementById('newPw2').value='';
+}
+
+function doResetPassword(){
+  if(!forgotOtpData){ return; }
+  const p1=document.getElementById('newPw1').value;
+  const p2=document.getElementById('newPw2').value;
+  if(p1.length<6){ showForgotMsg('forgotNewPwMsgBox','❌ Mật khẩu phải từ 6 ký tự!'); return; }
+  if(p1!==p2){ showForgotMsg('forgotNewPwMsgBox','❌ Mật khẩu xác nhận không trùng khớp!'); return; }
+  const users=getUsers();
+  const u=users.find(x=>x.id===forgotOtpData.userId);
+  if(!u){ showForgotMsg('forgotNewPwMsgBox','❌ Không tìm thấy tài khoản!'); return; }
+  u.password=p1; saveUsers(users);
+  closeForgotModal();
+  showGlobalMsg('✅ Đặt lại mật khẩu thành công! Vui lòng đăng nhập lại.','success');
+  setTimeout(()=>openAuth('login'),800);
+}
+
+async function getUserIP(){
+  try{
+    const res = await fetch('https://api.ipify.org?format=json');
+    const data = await res.json();
+    return data.ip || 'Unknown';
+  }catch(e){
+    return 'Unknown';
+  }
+}
+
+function doLogout(){
+  currentUser=null; saveUser(null); renderNav(); renderProducts(); showPage('home');
+  showGlobalMsg('✅ Đã đăng xuất khỏi hệ thống.','success');
+}
+
+function openNap(){ if(!currentUser){ openAuth('login'); return; } document.getElementById('napModal').classList.add('open'); resetNap(); }
+function closeNap(){ document.getElementById('napModal').classList.remove('open'); }
+function resetNap(){
+  document.getElementById('napStep1').style.display='block';
+  document.getElementById('napStep2').style.display='none';
+  document.getElementById('napAmount').value='';
+  document.querySelectorAll('.amount-btn').forEach(b=>b.classList.remove('active'));
+}
+function setAmount(v){ document.getElementById('napAmount').value=v; document.querySelectorAll('.amount-btn').forEach(b=>b.classList.toggle('active',parseInt(b.textContent.replace(/[^0-9]/g,''))===v)); }
+function clearPreset(){ document.querySelectorAll('.amount-btn').forEach(b=>b.classList.remove('active')); }
+
+function taoQR(){
+  const amt=parseInt(document.getElementById('napAmount').value);
+  if(!amt||amt<10000){ alert('⚠️ Số tiền nạp tối thiểu là 10.000đ!'); return; }
+  const code='KYRA'+currentUser.username.toUpperCase()+Math.floor(100+Math.random()*900);
+  document.getElementById('napQrImg').src='https://img.vietqr.io/image/VPBank-8818690730-qr_only.png?amount='+amt+'&addInfo='+encodeURIComponent(code)+'&accountName=NGUYEN%20HUU%20GIA%20BAO';
+  document.getElementById('napInfoAmount').textContent=fmt(amt);
+  document.getElementById('napInfoContent').textContent=code;
+  document.getElementById('napStep1').style.display='none';
+  document.getElementById('napStep2').style.display='block';
+}
+function copyContent(){
+  const t=document.getElementById('napInfoContent').textContent;
+  navigator.clipboard.writeText(t).then(()=>showGlobalMsg('✅ Đã sao chép: '+t,'success'));
+}
+
+function openBuyModal(idx){
+  if(!currentUser){ openAuth('login'); return; }
+  const p=PRODUCTS[currentCat].items[idx];
+  const bal=currentUser.balance||0; const after=bal-p.price;
+  document.getElementById('modal-pname').textContent=p.name;
+  document.getElementById('modal-pprice').textContent=fmt(p.price);
+  document.getElementById('modal-balance').textContent=fmt(bal);
+  const ae=document.getElementById('modal-after');
+  ae.textContent=after<0?'KHÔNG ĐỦ SỐ DƯ':fmt(after);
+  ae.style.color=after<0?'var(--accent2)':'var(--green)';
+  pendingBuy={idx,cat:currentCat};
+  document.getElementById('buyModal').classList.add('open');
+}
+function closeBuyModal(){ document.getElementById('buyModal').classList.remove('open'); pendingBuy=null; }
+
+function confirmBuy(){
+  if(!pendingBuy||!currentUser){ closeBuyModal(); return; }
+  const p=PRODUCTS[pendingBuy.cat].items[pendingBuy.idx];
+  const users=getUsers(); const dbUser=users.find(u=>u.id===currentUser.id);
+  if(!dbUser||dbUser.balance<p.price){
+    closeBuyModal();
+    showGlobalMsg('❌ Số dư không đủ! Vui lòng nạp thêm tiền. Liên hệ Zalo KTV: 0908967936','error');
+    setTimeout(()=>openNap(),800); return;
+  }
+  dbUser.balance-=p.price;
+  if(!dbUser.purchase_history) dbUser.purchase_history=[];
+  dbUser.purchase_history.push({name:p.name,price:p.price,time:new Date().toLocaleString('vi-VN'),link:p.link,video:p.video||''});
+  saveUsers(users); currentUser=dbUser; saveUser(dbUser);
+  closeBuyModal(); renderNav(); renderProducts(); showSuccessModal(p);
+}
+
+function buildVideoEmbed(url){
+  if(!url) return '';
+  if(url.includes('youtube.com/shorts/')){
+    const vid=url.split('shorts/')[1].split('?')[0];
+    return '<iframe src="https://www.youtube.com/embed/'+vid+'" allowfullscreen></iframe>';
+  }
+  if(url.includes('youtube.com')||url.includes('youtu.be')){
+    let vid='';
+    if(url.includes('v=')) vid=url.split('v=')[1].split('&')[0].split('?')[0];
+    else vid=url.split('youtu.be/')[1].split('?')[0].split('&')[0];
+    vid=vid.split('https')[0].replace(/[^a-zA-Z0-9_-]/g,'');
+    return '<iframe src="https://www.youtube.com/embed/'+vid+'" allowfullscreen></iframe>';
+  }
+  return '<video src="'+url+'" controls style="width:100%;max-height:200px;"></video>';
+}
+
+function showSuccessModal(p){
+  document.getElementById('suc-name').textContent=p.name;
+  document.getElementById('suc-balance').textContent=fmt(currentUser.balance);
+  const fs=document.getElementById('suc-file-section'), vs=document.getElementById('suc-video-section');
+  if(p.link){ document.getElementById('suc-link').textContent=p.link; document.getElementById('suc-dl-btn').href=p.link; fs.style.display='block'; } else { fs.style.display='none'; }
+  if(p.video){ document.getElementById('suc-video-frame').innerHTML=buildVideoEmbed(p.video); vs.style.display='block'; } else { vs.style.display='none'; }
+  document.getElementById('successModal').classList.add('open');
+}
+function closeSuccess(){ document.getElementById('successModal').classList.remove('open'); }
+function openOwnedModal(idx){ showSuccessModal(PRODUCTS[currentCat].items[idx]); }
+
+function showPage(page){
+  ['home','contact','policy','storage','dashboard'].forEach(p=>{
+    const el=document.getElementById('page-'+p);
+    if(el) el.style.display=(p===page)?'block':'none';
+  });
+  window.scrollTo(0,0);
+  if(page==='home') renderProducts();
+  if(page==='storage') renderStorage();
+  if(page==='dashboard') renderDashboard('overview');
+}
+
+function renderStorage(){
+  const el=document.getElementById('storageContent');
+  if(!currentUser){ el.innerHTML='<p style="color:var(--dim);">🔑 Vui lòng <a href="#" onclick="openAuth(\'login\')" style="color:var(--accent);">đăng nhập</a> để xem kho file.</p>'; return; }
+  const hist=currentUser.purchase_history||[];
+  if(!hist.length){ el.innerHTML='<p style="color:var(--dim);">📭 Bạn chưa sở hữu file nào. Hãy ra Trang chủ mua hàng!</p>'; return; }
+  el.innerHTML=hist.slice().reverse().map(h=>`<div class="storage-item">
+    <div class="storage-item-name">${h.name}</div>
+    <div class="storage-item-time">⏱️ Ngày mua: ${h.time} · <span style="color:var(--green)">Đang hoạt động ✅</span></div>
+    <div class="storage-btns">
+      ${h.link?`<a href="${h.link}" target="_blank" class="pbtn buy" style="padding:8px 14px;">⬇️ TẢI FILE</a>`:''}
+      ${h.video?`<button class="pbtn" style="background:linear-gradient(135deg,var(--gold),#aa7700);color:#000;padding:8px 14px;" onclick="playVideoInline(this,'${h.video}')">🎬 XEM VIDEO</button>`:''}
+    </div>
+    <div class="video-inline-wrap" style="display:none;margin-top:10px;"></div>
+  </div>`).join('');
+}
+
+function playVideoInline(btn,url){
+  const wrap=btn.closest('.storage-item').querySelector('.video-inline-wrap');
+  if(wrap.style.display==='block'){ wrap.style.display='none'; return; }
+  wrap.innerHTML=buildVideoEmbed(url); wrap.style.display='block';
+}
+
+function renderDashboard(tab){
+  if(!currentUser){ showPage('home'); return; }
+  const main=document.getElementById('dashMain');
+  document.getElementById('dashMenuOverview').classList.toggle('active',tab==='overview');
+  document.getElementById('dashMenuProfile').classList.toggle('active',tab==='profile');
+  const ma=document.getElementById('dashMenuAdmin');
+  if(isAdmin(currentUser)){ ma.style.display='block'; ma.classList.toggle('active',tab==='admin'); } else { ma.style.display='none'; }
+
+  if(tab==='overview'){
+    const hist=currentUser.purchase_history||[];
+    main.innerHTML=`<div class="dc fade-in">
+      <h3>📊 TỔNG QUAN HỒ SƠ THÀNH VIÊN</h3>
+      <p>👤 Tên tài khoản: <strong>${currentUser.username.toUpperCase()}</strong></p>
+      <p>🙍 Họ và tên: <strong>${currentUser.fullname}</strong></p>
+      <p>💰 Số dư khả dụng: <strong style="color:var(--gold);font-size:16px;">${fmt(currentUser.balance)}</strong></p>
+      <p>🌐 Địa chỉ IP: <strong style="color:var(--accent);font-family:monospace;">${currentUser.ip||'---'}</strong></p>
+      <p>📅 Ngày tham gia: <strong>${currentUser.created_at||'---'}</strong></p>
+      <p>🛒 Số file đã mua: <strong style="color:var(--green);">${hist.length} sản phẩm</strong></p>
+    </div>
+    <div class="dc fade-in" style="margin-top:0;">
+      <h3>⚡ THAO TÁC NHANH</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="sbtn cyan" style="max-width:200px;" onclick="openNap()">💳 Nạp Tiền</button>
+        <button class="sbtn gold" style="max-width:200px;" onclick="showPage('storage')">📦 Kho File</button>
+        <button class="sbtn" style="max-width:200px;background:linear-gradient(135deg,var(--accent2),#7a0820);color:#fff;" onclick="showPage('home')">🛒 Mua Hàng</button>
+      </div>
+    </div>`;
+  } else if(tab==='profile'){
+    main.innerHTML=`<div class="dc fade-in">
+      <h3>✏️ CẬP NHẬT HỌ VÀ TÊN</h3>
+      <div class="fg" style="margin-top:10px;"><label>HỌ VÀ TÊN MỚI</label>
+      <input type="text" id="pf-fullname" value="${currentUser.fullname}" placeholder="Nhập họ và tên..."></div>
+      <button class="sbtn cyan" style="max-width:200px;" onclick="saveProfile()">LƯU THAY ĐỔI</button>
+    </div>`;
+  } else if(tab==='admin'&&isAdmin(currentUser)){
+    const allUsers=getUsers();
+    const totalBalance=allUsers.reduce((s,u)=>s+u.balance,0);
+    const totalPurchases=allUsers.reduce((s,u)=>s+(u.purchase_history?u.purchase_history.length:0),0);
+    const rowsHtml=allUsers.map((u,i)=>`<tr>
+      <td style="color:var(--dim);text-align:center;">${i+1}</td>
+      <td style="color:var(--accent);font-family:monospace;">${u.ip||'---'}</td>
+      <td style="font-weight:bold;color:#fff;">${u.username} <span class="admin-badge ${u.role==='admin'?'admin':'user'}">${u.role==='admin'?'ADMIN':'USER'}</span></td>
+      <td class="em">${u.email||'<span style="color:var(--dim2);">chưa có</span>'}</td>
+      <td style="color:var(--gold);font-family:monospace;">${u.password}</td>
+      <td>${u.fullname}</td>
+      <td style="color:var(--green);">${fmt(u.balance)}</td>
+      <td class="dt">${u.created_at||'---'}</td>
+      <td style="text-align:center;">${u.purchase_history?u.purchase_history.length:0}</td>
+      <td><button onclick="adminAddBalance('${u.id}')" style="padding:4px 10px;background:var(--green);color:#000;border:none;cursor:pointer;font-size:11px;font-family:'Orbitron',monospace;font-weight:900;margin-bottom:4px;display:block;">+TIỀN</button><button onclick="adminDeleteUser('${u.id}')" style="padding:4px 10px;background:var(--accent2);color:#fff;border:none;cursor:pointer;font-size:10px;font-family:'Orbitron',monospace;font-weight:900;display:block;" ${u.role==='admin'?'disabled title="Không thể xóa admin"':''}>XÓA</button></td>
+    </tr>`).join('');
+    main.innerHTML=`<div class="dc fade-in" style="border:1px solid var(--gold);">
+      <h3 style="color:var(--gold);">👑 BẢNG ĐIỀU KHIỂN QUẢN TRỊ – ADMIN</h3>
+      <div class="admin-stats-grid">
+        <div class="admin-stat-card"><div class="admin-stat-num" style="color:var(--gold);">${allUsers.length}</div><div class="admin-stat-label">Tổng thành viên</div></div>
+        <div class="admin-stat-card"><div class="admin-stat-num" style="color:var(--green);">${fmt(totalBalance)}</div><div class="admin-stat-label">Tổng số dư hệ thống</div></div>
+        <div class="admin-stat-card"><div class="admin-stat-num" style="color:var(--accent2);">${totalPurchases}</div><div class="admin-stat-label">Tổng giao dịch mua</div></div>
+      </div>
+      <div class="admin-table-wrapper">
+        <table class="admin-table">
+          <thead><tr><th>STT</th><th>ĐỊA CHỈ IP</th><th>TÊN ĐĂNG NHẬP</th><th>EMAIL</th><th>MẬT KHẨU</th><th>HỌ VÀ TÊN</th><th>SỐ DƯ</th><th>NGÀY TẠO</th><th>ĐÃ MUA</th><th>THAO TÁC</th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+}
+
+function switchDashTab(tab){ renderDashboard(tab); }
+
+function adminAddBalance(uid){
+  const amt=prompt('Nhập số tiền muốn cộng (VD: 100000):'); if(!amt) return;
+  const n=parseInt(amt); if(isNaN(n)||n<=0){ alert('Số tiền không hợp lệ!'); return; }
+  const users=getUsers(); const u=users.find(x=>x.id===uid);
+  if(!u){ alert('Không tìm thấy tài khoản!'); return; }
+  u.balance+=n; saveUsers(users);
+  if(currentUser&&currentUser.id===uid){ currentUser.balance=u.balance; saveUser(currentUser); renderNav(); }
+  showGlobalMsg('✅ Đã cộng '+fmt(n)+' vào tài khoản '+u.username+'!','success');
+  renderDashboard('admin');
+}
+
+function adminDeleteUser(uid){
+  if(!confirm('⚠️ Bạn có chắc muốn XÓA tài khoản này không? Hành động này không thể hoàn tác!')) return;
+  const users=getUsers();
+  const u=users.find(x=>x.id===uid);
+  if(!u){ alert('Không tìm thấy tài khoản!'); return; }
+  if(u.role==='admin'){ alert('Không thể xóa tài khoản admin!'); return; }
+  const filtered=users.filter(x=>x.id!==uid); saveUsers(filtered);
+  showGlobalMsg('✅ Đã xóa tài khoản '+u.username+'!','success');
+  renderDashboard('admin');
+}
+
+function saveProfile(){
+  const fn=document.getElementById('pf-fullname').value.trim();
+  if(fn.length<2){ alert('Họ tên tối thiểu 2 ký tự!'); return; }
+  currentUser.fullname=fn; saveUser(currentUser);
+  const users=getUsers(); const idx=users.findIndex(u=>u.id===currentUser.id);
+  if(idx>=0){ users[idx]=currentUser; saveUsers(users); }
+  renderNav(); showGlobalMsg('✅ Đã cập nhật họ tên thành công!','success'); renderDashboard('profile');
+}
+
+function showGlobalMsg(text,type){
+  const el=document.getElementById('globalMsg'); el.className='msg '+type; el.innerHTML=text; el.style.display='block';
+  window.scrollTo(0,0); setTimeout(()=>{ el.style.display='none'; },5000);
+}
+
+function genMockTransactions(){
+  const tnames=["Nguyễn Văn Hùng","Trần Minh Quân","Lê Hoàng Nam","Phạm Gia Bảo","Đặng Quốc Khánh","Võ Minh Tân","Ngô Gia Huy","Bùi Quang Vinh"];
+  const amounts=[50000,100000,150000,200000,300000,500000];
+  const f1=document.getElementById('napFeedHome'), f2=document.getElementById('buyFeedHome');
+  const allProds=Object.values(PRODUCTS).flatMap(c=>c.items);
+  if(f1) for(let i=0;i<6;i++){ let n=tnames[Math.floor(Math.random()*tnames.length)],a=amounts[Math.floor(Math.random()*amounts.length)]; f1.innerHTML+=`<div class="recent-item">⚡ <span class="tx-name">${n}</span> vừa nạp <span class="tx-amt">+${fmt(a)}</span> qua VPBank.</div>`; }
+  if(f2&&allProds.length) for(let i=0;i<6;i++){ let n=tnames[Math.floor(Math.random()*tnames.length)],p=allProds[Math.floor(Math.random()*allProds.length)]; f2.innerHTML+=`<div class="buy-tx-item"><div class="btx-icon">📦</div><div class="btx-info"><span class="btx-name">${n}</span><span class="btx-prod">Sở hữu: ${p.name}</span></div></div>`; }
+}
+
+// FIREWORKS
+const canvas=document.getElementById('fw-canvas'),cx=canvas.getContext('2d');
+let rockets=[],parts=[];
+function resize(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
+window.addEventListener('resize',resize); resize();
+function rnd(a,b){ return Math.random()*(b-a)+a; }
+function launch(){ if(rockets.length<3) rockets.push({x:rnd(canvas.width*.1,canvas.width*.9),y:canvas.height,vx:rnd(-1.5,1.5),vy:rnd(-11,-7),c:'hsl('+rnd(0,360)+',100%,65%)',trail:[]}); }
+function burst(x,y,c){ for(let i=0;i<35;i++){ let a=rnd(0,Math.PI*2),s=rnd(1,5); parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,r:rnd(1,2.5),alpha:1,decay:rnd(.015,.03),gravity:.06,c}); } }
+function frame(){
+  cx.fillStyle='rgba(4,6,14,.2)'; cx.fillRect(0,0,canvas.width,canvas.height);
+  rockets.forEach((r,i)=>{ r.trail.push({x:r.x,y:r.y}); if(r.trail.length>8) r.trail.shift(); cx.beginPath(); r.trail.forEach((t,j)=>{ if(j===0) cx.moveTo(t.x,t.y); else cx.lineTo(t.x,t.y); }); cx.strokeStyle=r.c; cx.lineWidth=1.5; cx.stroke(); r.x+=r.vx; r.y+=r.vy; r.vy+=.18; if(r.vy>=rnd(-.5,.5)){ burst(r.x,r.y,r.c); rockets.splice(i,1); } });
+  for(let i=parts.length-1;i>=0;i--){ const p=parts[i]; p.x+=p.vx; p.y+=p.vy; p.vy+=p.gravity; p.vx*=.97; p.alpha-=p.decay; if(p.alpha<=0){ parts.splice(i,1); continue; } cx.globalAlpha=p.alpha; cx.beginPath(); cx.arc(p.x,p.y,p.r,0,Math.PI*2); cx.fillStyle=p.c; cx.fill(); }
+  cx.globalAlpha=1; requestAnimationFrame(frame);
+}
+frame(); setInterval(launch,900);
+</script>
+</body>
+</html>
