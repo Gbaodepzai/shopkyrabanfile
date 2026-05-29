@@ -1524,7 +1524,7 @@ function taoQR(){
   const amt=parseInt(document.getElementById('napAmount').value);
   if(!amt||amt<10000){ alert('⚠️ Số tiền nạp tối thiểu là 10.000đ!'); return; }
   const code='KYRA'+currentUser.username.toUpperCase()+Math.floor(100+Math.random()*900);
-  document.getElementById('napQrImg').src='https://img.vietqr.io/image/VPBank-8818690730-qr_only.png?amount='+amt+'&addInfo='+encodeURIComponent(code)+'&accountName=NGUYEN%20HUU%20GIA%20BAO';
+  document.getElementById('napQrImg').src='https://img.vietqr.io/image/BIDV-8818690730-qr_only.png?amount='+amt+'&addInfo='+encodeURIComponent(code)+'&accountName=NGUYEN%20HUU%20GIA%20BAO';
   document.getElementById('napInfoAmount').textContent=fmt(amt);
   document.getElementById('napInfoContent').textContent=code;
   document.getElementById('napStep1').style.display='none';
